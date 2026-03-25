@@ -30,7 +30,7 @@ body {
   line-height: 1.6;
 }
 
-/* RIGHT LAYER */
+/* RIGHT */
 .right {
   width: 50%;
   position: relative;
@@ -40,12 +40,9 @@ body {
 
 .canvas {
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
+  inset: 0;
 }
 
-/* RESULT */
 .result {
   position: absolute;
   right: 16px;
@@ -102,10 +99,7 @@ GIG: -10k
 UOB WORLD: 81 + 109 +
 147 + 74 + 79 +
 733.27 + 3500 + 50
-
-UOB ONE: 45 + 22 + 47 +
-45 - 63.50 + 145 + 272 -
-16 + 47 + 16 + 33 + 50`);
+`);
 
 const canvas = document.getElementById("canvas");
 const totalDiv = document.getElementById("total");
@@ -117,7 +111,7 @@ cm.on("change", () => {
   render();
 });
 
-/* ---------- SCROLL SYNC ---------- */
+/* ---------- SCROLL ---------- */
 
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
@@ -125,25 +119,46 @@ cm.on("scroll", () => {
     `translateY(-${scroll.top}px)`;
 });
 
-/* ---------- MATH ---------- */
+/* ---------- ENGINE ---------- */
 
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
-    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000);
+    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
+    .replace(/[^0-9+\-*/().\s]/g, " ");
+}
+
+function cleanExpression(expr) {
+  return expr
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[+\-*/]+$/, "")
+    .replace(/^\s*[+\-*/]+/, "");
 }
 
 function safeEval(expr) {
   try {
-    if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
-    return Function('"use strict";return (' + expr + ')')();
+    if (!expr) return { ok: false };
+
+    if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
+      return { ok: false };
+    }
+
+    const val = Function('"use strict";return (' + expr + ')')();
+
+    if (typeof val !== "number" || isNaN(val)) {
+      return { ok: false };
+    }
+
+    return { ok: true, value: val };
+
   } catch {
-    return null;
+    return { ok: false };
   }
 }
 
-/* ---------- PARSER (PRO) ---------- */
+/* ---------- PARSER ---------- */
 
 function parseBlocks(lines) {
   const blocks = [];
@@ -151,31 +166,27 @@ function parseBlocks(lines) {
   let startLine = null;
 
   for (let i = 0; i < lines.length; i++) {
-    let raw = lines[i];
+    let raw = lines[i] || "";
     let line = raw.split("//")[0];
 
     if (line.includes(":")) {
-      // flush ก่อนหน้า
       if (buffer.trim()) {
-        blocks.push({ line: startLine, expr: buffer });
+        blocks.push(buildBlock(startLine, buffer));
       }
-
       startLine = i;
       buffer = line.split(":").slice(1).join(":");
       continue;
     }
 
     if (!buffer && line.trim()) {
-      // line ไม่มี label แต่มี expression
       startLine = i;
     }
 
     buffer += " " + line;
 
-    // ถ้าจบ expression
     if (!/[+\-*/]$/.test(line.trim())) {
       if (buffer.trim()) {
-        blocks.push({ line: startLine, expr: buffer });
+        blocks.push(buildBlock(startLine, buffer));
       }
       buffer = "";
       startLine = null;
@@ -183,53 +194,65 @@ function parseBlocks(lines) {
   }
 
   if (buffer.trim()) {
-    blocks.push({ line: startLine, expr: buffer });
+    blocks.push(buildBlock(startLine, buffer));
   }
 
-  return blocks.map(b => ({
-    line: b.line,
-    value: safeEval(normalize(b.expr))
-  }));
+  return blocks;
 }
 
-/* ---------- RENDER ENGINE ---------- */
+function buildBlock(line, expr) {
+  const normalized = normalize(expr);
+  const cleaned = cleanExpression(normalized);
+  const result = safeEval(cleaned);
+
+  return {
+    line,
+    ok: result.ok,
+    value: result.ok ? result.value : null
+  };
+}
+
+/* ---------- RENDER ---------- */
 
 function render() {
-  const lineCount = cm.lineCount();
-  const lines = [];
+  canvas.innerHTML = "";
 
-  for (let i = 0; i < lineCount; i++) {
-    lines.push(cm.getLine(i) || "");
+  const lines = [];
+  for (let i = 0; i < cm.lineCount(); i++) {
+    lines.push(cm.getLine(i));
   }
 
   const blocks = parseBlocks(lines);
 
-  canvas.innerHTML = "";
   let total = 0;
 
   blocks.forEach(b => {
-    if (b.value === null || isNaN(b.value)) return;
-
     const coord = cm.charCoords({ line: b.line, ch: 0 }, "local");
 
     const el = document.createElement("div");
     el.className = "result";
     el.style.top = coord.top + "px";
 
-    const num = Number(b.value);
-    el.textContent = num.toLocaleString();
+    if (b.ok) {
+      const num = b.value;
+      el.textContent = num.toLocaleString();
 
-    if (num > 0) el.classList.add("positive");
-    if (num < 0) el.classList.add("negative");
+      if (num > 0) el.classList.add("positive");
+      if (num < 0) el.classList.add("negative");
+
+      total += num;
+    } else {
+      el.textContent = "—";
+      el.style.opacity = 0.3;
+    }
 
     canvas.appendChild(el);
-    total += num;
   });
 
   totalDiv.textContent = total.toLocaleString();
 }
 
-/* ---------- INIT RUN ---------- */
+/* ---------- INIT ---------- */
 render();
 </script>
 
