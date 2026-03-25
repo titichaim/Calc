@@ -16,6 +16,48 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+/* ---------------- AUTH SCREEN ---------------- */
+#auth-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  text-align: center;
+}
+
+.title {
+  font-size: 32px;
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  color: #888;
+  margin-bottom: 32px;
+}
+
+.btn-google {
+  background: #fff;
+  color: #000;
+  border: none;
+  padding: 12px 24px;
+  font-size: 16px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-google:active { opacity: 0.8; }
+
+/* ---------------- APP SCREEN ---------------- */
+#app-screen {
+  display: none; /* ซ่อนไว้จนกว่าจะ Login สำเร็จ */
+}
+
 .container {
   display: flex;
   height: calc(100vh - 60px);
@@ -31,9 +73,7 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.cm-number {
-  color: #4cd964 !important;
-}
+.cm-number { color: #4cd964 !important; }
 
 /* RIGHT */
 .right {
@@ -69,22 +109,56 @@ body {
   align-items: center;
   padding: 0 16px;
 }
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #888;
+  font-size: 14px;
+}
+
+.btn-logout {
+  background: transparent;
+  color: #ff3b30;
+  border: 1px solid #ff3b30;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
 </style>
 </head>
 
 <body>
 
-<div class="container">
-  <textarea id="editor"></textarea>
-
-  <div class="right">
-    <div id="canvas" class="canvas"></div>
-  </div>
+<div id="auth-screen">
+  <div class="title">Calc Pro</div>
+  <div class="subtitle">Securely sync your calculations</div>
+  <button id="login-btn" class="btn-google">
+    <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Sign in with Google
+  </button>
 </div>
 
-<div class="footer">
-  <div>Total</div>
-  <div id="total">0</div>
+<div id="app-screen">
+  <div class="container">
+    <textarea id="editor"></textarea>
+    <div class="right">
+      <div id="canvas" class="canvas"></div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div class="user-info">
+      <span id="user-email"></span>
+      <button id="logout-btn" class="btn-logout">Logout</button>
+    </div>
+    <div style="text-align: right;">
+      <div style="font-size: 12px; color: #888;">Total</div>
+      <div id="total" style="font-size: 20px; font-weight: bold;">0</div>
+    </div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
@@ -92,9 +166,10 @@ body {
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 /* =========================================
-   1. ใส่การตั้งค่า Firebase ของคุณตรงนี้
+   1. ใส่ Firebase Config ของคุณตรงนี้
 ========================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCZLADs__pYeCSFChAEkA9dtuqWMZQ0K0c",
@@ -105,14 +180,62 @@ const firebaseConfig = {
   appId: "1:636760379592:web:79e917e03b29586f5e55fd",
   measurementId: "G-656Y5L5ZCM"
 };
-// เริ่มต้นใช้งาน Firebase
+
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
-// ตั้งชื่อ Collection ว่า "calculator" และ Document ชื่อ "myData"
-const docRef = doc(db, "calculator", "myData"); 
+const auth = getAuth(app);
+const provider = new GoogleAuthProvider();
+
+let docRef = null;
+let saveTimeout = null;
+
+/* ---------- DOM ELEMENTS ---------- */
+const authScreen = document.getElementById("auth-screen");
+const appScreen = document.getElementById("app-screen");
+const loginBtn = document.getElementById("login-btn");
+const logoutBtn = document.getElementById("logout-btn");
+const userEmailDisplay = document.getElementById("user-email");
+const canvas = document.getElementById("canvas");
+const totalDiv = document.getElementById("total");
+
+/* ---------- AUTH LOGIC ---------- */
+loginBtn.addEventListener("click", () => {
+  signInWithPopup(auth, provider).catch(error => alert("Login Failed: " + error.message));
+});
+
+logoutBtn.addEventListener("click", () => {
+  signOut(auth).catch(error => alert("Logout Failed: " + error.message));
+});
+
+onAuthStateChanged(auth, (user) => {
+  if (user) {
+    // ---- กรณี Login สำเร็จ ----
+    authScreen.style.display = "none";
+    appScreen.style.display = "block";
+    userEmailDisplay.textContent = user.email;
+    
+    // ตั้งค่าให้อ่าน/เขียนข้อมูลเฉพาะใน Folder users -> (รหัส UID ของคนๆ นั้น)
+    docRef = doc(db, "users", user.uid);
+    
+    // โหลดข้อมูลจาก Firebase ของผู้ใช้รายนี้
+    getDoc(docRef).then((docSnap) => {
+      if (docSnap.exists() && docSnap.data().content !== undefined) {
+        cm.setValue(docSnap.data().content);
+      } else {
+        cm.setValue(`DEPT: -247000\nNOTE: ข้อมูลส่วนตัวของคุณพร้อมใช้งานแล้ว ;`);
+      }
+      setTimeout(() => cm.refresh(), 100); // จัดระเบียบหน้าจอ CodeMirror
+    });
+
+  } else {
+    // ---- กรณี Logout หรือยังไม่ได้ Login ----
+    authScreen.style.display = "flex";
+    appScreen.style.display = "none";
+    docRef = null;
+  }
+});
 
 /* ---------- INIT CODEMIRROR ---------- */
-
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
@@ -137,55 +260,28 @@ const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   viewportMargin: Infinity 
 });
 
-// โหลดข้อมูลเบื้องต้นจากเครื่องก่อน (เพื่อให้หน้าเว็บแสดงผลทันที ไม่ต้องรอเน็ต)
-cm.setValue(localStorage.getItem("calc-data") || `กำลังเชื่อมต่อ Firebase...`);
-
-const canvas = document.getElementById("canvas");
-const totalDiv = document.getElementById("total");
-
-/* =========================================
-   2. ดึงข้อมูลจาก Firebase มาแสดงทับ
-========================================= */
-getDoc(docRef).then((docSnap) => {
-  if (docSnap.exists() && docSnap.data().content !== undefined) {
-    const firebaseData = docSnap.data().content;
-    cm.setValue(firebaseData); // อัปเดตหน้าจอเป็นข้อมูลจาก Firebase
-    localStorage.setItem("calc-data", firebaseData); // อัปเดตเครื่องตัวเองให้ตรงกัน
-  } else {
-    cm.setValue(`DEPT: -247000\nNOTE: ลองลบและพิมพ์ข้อมูลของคุณได้เลยครับ`);
-  }
-}).catch(err => {
-  console.error("โหลด Firebase ไม่สำเร็จ (อาจยังไม่ได้เปิดสิทธิ์ Rules):", err);
-});
-
-/* =========================================
-   3. ระบบ Save ลง Firebase (พร้อม Debounce)
-========================================= */
-let saveTimeout = null;
-
+/* ---------- SAVE LOGIC ---------- */
 cm.on("change", () => {
   const val = cm.getValue();
-  localStorage.setItem("calc-data", val); // เซฟลงเครื่องทันที
   render();
 
-  // หน่วงเวลาเซฟลง Firebase 1 วินาที (ถ้าพิมพ์ต่อเวลาจะถูกรีเซ็ตใหม่)
-  clearTimeout(saveTimeout);
-  saveTimeout = setTimeout(() => {
-    setDoc(docRef, { content: val }, { merge: true })
-      .then(() => console.log("ซิงค์ข้อมูลลง Firebase สำเร็จ!"))
-      .catch(err => console.error("เซฟลง Firebase ไม่สำเร็จ:", err));
-  }, 1000); 
+  // เซฟข้อมูลส่วนตัวลง Firebase (หน่วงเวลา 1 วิ)
+  if (docRef) {
+    clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      setDoc(docRef, { content: val }, { merge: true })
+        .catch(err => console.error("Save Error:", err));
+    }, 1000); 
+  }
 });
 
-/* ---------- SCROLL ---------- */
-
+/* ---------- SCROLL LOGIC ---------- */
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
   canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
 
 /* ---------- ENGINE & PARSER ---------- */
-
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
@@ -266,7 +362,6 @@ function buildBlock(line, expr) {
 }
 
 /* ---------- RENDER ---------- */
-
 function render() {
   canvas.innerHTML = "";
   const lines = [];
@@ -300,9 +395,6 @@ function render() {
   const scrollInfo = cm.getScrollInfo();
   canvas.style.transform = `translateY(-${scrollInfo.top}px)`;
 }
-
-/* ---------- INIT ---------- */
-setTimeout(render, 50); 
 </script>
 
 </body>
