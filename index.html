@@ -1,104 +1,10 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-
-<title>Mobile Calc</title>
-
-<style>
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #000;
-    color: #fff;
-  }
-
-  .container {
-    display: flex;
-    height: calc(100vh - 60px);
-  }
-
-  textarea {
-    width: 50%;
-    background: #000;
-    color: #9fef00;
-    border: none;
-    padding: 16px;
-    font-size: 16px;
-    line-height: 28px;
-    outline: none;
-    resize: none;
-  }
-
-  .right {
-    width: 50%;
-    padding: 16px;
-    border-left: 1px solid #222;
-    overflow-y: auto;
-  }
-
-  .row {
-    height: 28px;
-    display: flex;
-    justify-content: flex-end;
-    font-size: 16px;
-  }
-
-  .positive { color: #4cd964; }
-  .negative { color: #ff3b30; }
-  .error { color: #666; }
-
-  .footer {
-    height: 60px;
-    background: #111;
-    border-top: 1px solid #222;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    font-size: 18px;
-  }
-
-  .total {
-    font-weight: bold;
-  }
-</style>
-
-</head>
-<body>
-
-<div class="container">
-  <textarea id="input"></textarea>
-  <div class="right" id="results"></div>
-</div>
-
-<div class="footer">
-  <div>Total</div>
-  <div class="total" id="total">0</div>
-</div>
-
 <script>
-const input = document.getElementById("input");
-const resultsDiv = document.getElementById("results");
-const totalDiv = document.getElementById("total");
-
-// โหลดข้อมูล
-input.value = localStorage.getItem("calc-data") || 
-`deposit: 20000
-debt: -10000
-credit card: -10000`;
-
-calculate();
-
-input.addEventListener("input", () => {
-  localStorage.setItem("calc-data", input.value);
-  calculate();
-});
-
-function extractExpression(line) {
-  const match = line.match(/[-+*/().0-9\s]+$/);
-  return match ? match[0].trim() : "";
+function normalizeExpression(expr) {
+  return expr
+    .replace(/,/g, "") // remove comma
+    .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
+    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
+    .trim();
 }
 
 function safeEval(expr) {
@@ -110,43 +16,43 @@ function safeEval(expr) {
   }
 }
 
-function calculate() {
-  const lines = input.value.split("\n");
-  resultsDiv.innerHTML = "";
-  let total = 0;
+function parseLines(lines) {
+  let results = [];
+  let buffer = "";
 
-  lines.forEach(line => {
-    const expr = extractExpression(line);
+  for (let i = 0; i < lines.length; i++) {
+    let line = lines[i];
 
-    const row = document.createElement("div");
-    row.className = "row";
+    // เอา comment ออก
+    line = line.split("//")[0];
 
-    if (!expr) {
-      resultsDiv.appendChild(row);
-      return;
+    // เอา label ออก (ก่อน :)
+    if (line.includes(":")) {
+      line = line.split(":").slice(1).join(":");
     }
 
-    const result = safeEval(expr);
+    line = normalizeExpression(line);
 
-    if (result === null || isNaN(result)) {
-      row.textContent = "";
-      row.classList.add("error");
-    } else {
-      const num = Number(result);
-      row.textContent = num.toLocaleString();
-
-      if (num > 0) row.classList.add("positive");
-      if (num < 0) row.classList.add("negative");
-
-      total += num;
+    if (!line.trim()) {
+      results.push(null);
+      continue;
     }
 
-    resultsDiv.appendChild(row);
-  });
+    buffer += " " + line;
 
-  totalDiv.textContent = total.toLocaleString();
+    // ถ้าจบด้วย operator → ยังไม่คำนวณ
+    if (/[+\-*/]$/.test(line)) {
+      results.push(null);
+      continue;
+    }
+
+    // คำนวณ
+    const result = safeEval(buffer);
+
+    results.push(result);
+    buffer = "";
+  }
+
+  return results;
 }
 </script>
-
-</body>
-</html>
