@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc Pro</title>
+<title>Calc Fixed</title>
 
 <style>
 body {
@@ -19,7 +19,7 @@ body {
   height: calc(100vh - 60px);
 }
 
-/* LEFT EDITOR */
+/* LEFT */
 .editor {
   position: relative;
   width: 50%;
@@ -54,11 +54,6 @@ textarea {
 .num { color: #4cd964; }
 .op { color: #5ac8fa; }
 .text { color: #ffffff; }
-.error { color: #ff3b30; }
-
-.active-line {
-  background: rgba(255,255,255,0.05);
-}
 
 /* RIGHT */
 .right {
@@ -113,15 +108,17 @@ const highlight = document.getElementById("highlight");
 const resultsDiv = document.getElementById("results");
 const totalDiv = document.getElementById("total");
 
+/* ---------- INIT ---------- */
 input.value = localStorage.getItem("calc-data") || 
-`Food: 100 + 50
-Taxi: 200*2
-Debt: -10k
+`DEPT: -247,000
+CC: -147,880.61
+GIG: -10k
 
-Note: hello world`;
+UOB: 100 + 50`;
 
 updateAll();
 
+/* ---------- EVENTS ---------- */
 input.addEventListener("input", () => {
   localStorage.setItem("calc-data", input.value);
   updateAll();
@@ -131,39 +128,34 @@ input.addEventListener("scroll", () => {
   highlight.scrollTop = input.scrollTop;
 });
 
-/* ---------- HIGHLIGHT ---------- */
+/* ---------- HIGHLIGHT (FIXED) ---------- */
 
-function highlightLine(line, isActive) {
-  let html = line
+function highlightText(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+
+    // number
     .replace(/(\d+(\.\d+)?)/g, '<span class="num">$1</span>')
-    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
-    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
 
-  if (isActive) {
-    return `<div class="active-line">${html}</div>`;
-  }
-  return `<div>${html}</div>`;
+    // operator
+    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
+
+    // text/label
+    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
 }
 
 function updateHighlight() {
-  const lines = input.value.split("\n");
-
-  const cursorPos = input.selectionStart;
-  const beforeCursor = input.value.slice(0, cursorPos);
-  const activeLineIndex = beforeCursor.split("\n").length - 1;
-
-  highlight.innerHTML = lines
-    .map((line, i) => highlightLine(line, i === activeLineIndex))
-    .join("");
+  highlight.innerHTML = highlightText(input.value); // ✅ FIX สำคัญ
 }
 
-/* ---------- PARSER ---------- */
+/* ---------- CALC ---------- */
 
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
-    .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
-    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000);
+    .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000);
 }
 
 function safeEval(expr) {
@@ -174,8 +166,6 @@ function safeEval(expr) {
     return null;
   }
 }
-
-/* ---------- CALC ---------- */
 
 function calculate() {
   const lines = input.value.split("\n");
