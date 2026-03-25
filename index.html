@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="th">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,6 +28,13 @@ body {
   color: #fff;
   font-size: 16px;
   line-height: 1.6;
+  /* แก้ไข: บังคับให้ใช้ฟอนต์เดียวกับ Body แทนฟอนต์ Monospace เดิมของระบบ */
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* แก้ไข: ใส่สีเขียวสำหรับคลาสตัวเลขใน CodeMirror */
+.cm-number {
+  color: #4cd964 !important;
 }
 
 /* RIGHT */
@@ -50,7 +57,7 @@ body {
 }
 
 .positive { color: #4cd964; }
-.negative { color: #ff3b30; } /* สีแดงสำหรับค่าติดลบ */
+.negative { color: #ff3b30; }
 
 /* FOOTER */
 .footer {
@@ -85,9 +92,24 @@ body {
 <script>
 /* ---------- INIT ---------- */
 
+// แก้ไข: สร้าง Mode ใหม่ชื่อ "calc" เพื่อแยกแยะสีตัวเลข
+CodeMirror.defineMode("calc", function() {
+  return {
+    token: function(stream) {
+      // ใช้ Regex ตรวจจับตัวเลข (รองรับลูกน้ำ, ทศนิยม และตัวย่อ k, m)
+      if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
+        return "number"; // จะถูกจับคู่กับ CSS คลาส .cm-number (สีเขียว)
+      }
+      // ข้ามตัวอักษรและเครื่องหมายอื่นๆ (ใช้สีขาวตามค่าเริ่มต้นของ CodeMirror)
+      stream.next();
+      return null;
+    }
+  };
+});
+
 const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
-  mode: "text",
+  mode: "calc", // แก้ไข: เรียกใช้โหมด "calc" ที่เพิ่งสร้างด้านบน
   lineWrapping: true
 });
 
@@ -134,7 +156,6 @@ function cleanExpression(expr) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[+\-*/]+$/, "")
-    // ไม่ตัดเครื่องหมาย + หรือ - ด้านหน้าสุดทิ้ง เพื่อรักษาค่าติดลบไว้
     .replace(/^\s*[*\/]+/, "");
 }
 
@@ -148,7 +169,6 @@ function safeEval(expr) {
 
     const val = Function('"use strict";return (' + expr + ')')();
 
-    // เช็คค่า Infinity กรณีหารด้วย 0 ด้วย isFinite
     if (typeof val !== "number" || isNaN(val) || !isFinite(val)) {
       return { ok: false };
     }
@@ -167,47 +187,48 @@ function parseBlocks(lines) {
   let currentExpr = "";
   let startLine = null;
 
+  function pushCurrent() {
+    if (currentExpr.trim() !== "") {
+      blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
+    }
+    currentExpr = "";
+    startLine = null;
+  }
+
   for (let i = 0; i < lines.length; i++) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0].trim();
     
-    if (line === "") continue; // ข้ามบรรทัดว่าง
+    if (line === "") {
+      pushCurrent();
+      continue;
+    }
 
-    // 1. ถ้าเจอบรรทัดที่มีเครื่องหมาย : หมายถึงการบังคับขึ้นกลุ่มใหม่
     if (line.includes(":")) {
-      if (currentExpr !== "") {
-        blocks.push(buildBlock(startLine, currentExpr));
-      }
+      pushCurrent();
       startLine = i;
       currentExpr = line.substring(line.indexOf(":") + 1).trim();
       continue;
     }
 
-    // เช็คว่าบรรทัดก่อนหน้าลงท้ายด้วยเครื่องหมายคณิตศาสตร์หรือไม่
-    let endsWithOp = /[+\-*/]$/.test(currentExpr.trim());
-    // เช็คว่าบรรทัดใหม่นี้ ขึ้นต้นด้วยเครื่องหมายคณิตศาสตร์หรือไม่
-    let startsWithOp = /^[+\-*/]/.test(line);
+    let endsWithOp = /[+\-*/(]$/.test(currentExpr.trim());
+    let startsWithOp = /^[+\-*/)]/.test(line);
 
     if (currentExpr === "") {
       startLine = i;
       currentExpr = line;
     } 
-    // 2. ถ้ามีการเชื่อมด้วยเครื่องหมาย (หน้าหรือหลัง) ให้นำสมการมาต่อกัน
     else if (endsWithOp || startsWithOp) {
       currentExpr += " " + line;
     } 
-    // 3. ถ้าไม่มีเครื่องหมายเชื่อมเลย แสดงว่าต้องการขึ้นผลลัพธ์ก้อนใหม่
     else {
-      blocks.push(buildBlock(startLine, currentExpr));
+      pushCurrent();
       startLine = i;
       currentExpr = line;
     }
   }
 
-  // ปิดจบกลุ่มสุดท้ายที่ค้างอยู่ใน Buffer
-  if (currentExpr !== "") {
-    blocks.push(buildBlock(startLine, currentExpr));
-  }
+  pushCurrent();
 
   return blocks;
 }
@@ -247,15 +268,13 @@ function render() {
 
     if (b.ok) {
       const num = b.value;
-      // จัดฟอร์แมตตัวเลขให้มีลูกน้ำ และมีทศนิยมสูงสุด 2 ตำแหน่ง
       el.textContent = num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
       if (num > 0) el.classList.add("positive");
-      if (num < 0) el.classList.add("negative"); // ใส่คลาส .negative ให้ตัวหนังสือเป็นสีแดง
+      if (num < 0) el.classList.add("negative");
 
       total += num;
     } else {
-      // หากบรรทัดไหนพิมพ์สมการผิด จะแสดงผลขีดกลางสีเทา เพื่อให้รู้ว่ามีข้อผิดพลาด
       el.textContent = "—";
       el.style.opacity = 0.3;
     }
@@ -263,12 +282,10 @@ function render() {
     canvas.appendChild(el);
   });
 
-  // อัปเดตยอดรวมด้านล่าง
   totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 /* ---------- INIT ---------- */
-// เพิ่ม Delay เล็กน้อยตอนโหลดครั้งแรก เพื่อให้ CodeMirror คำนวณความสูงบรรทัดเสร็จก่อน
 setTimeout(render, 50); 
 </script>
 
