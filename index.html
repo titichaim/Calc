@@ -74,7 +74,12 @@ body {
 }
 
 .cm-number { color: #4cd964 !important; }
-.cm-comment { color: #555 !important; } /* สีของเส้นประใน CodeMirror */
+
+/* ดีไซน์เส้นคั่นฝั่งซ้าย (ตัวอักษร --- ให้เป็นสีเทาเข้ม) */
+.cm-divider { 
+  color: #555 !important; 
+  letter-spacing: 2px;
+}
 
 /* RIGHT */
 .right {
@@ -95,15 +100,6 @@ body {
   position: absolute;
   right: 16px;
   font-size: 16px;
-}
-
-/* ดีไซน์ของเส้นคั่น (Divider) ฝั่งขวา */
-.divider-line {
-  position: absolute;
-  left: 0px;
-  right: 16px;
-  height: 1px;
-  background-color: #333;
 }
 
 .positive { color: #4cd964; }
@@ -229,7 +225,7 @@ onAuthStateChanged(auth, (user) => {
       if (docSnap.exists() && docSnap.data().content !== undefined) {
         cm.setValue(docSnap.data().content);
       } else {
-        cm.setValue(`DEPT: -247000\nNOTE: ข้อมูลพร้อมใช้งานแล้ว ;\n---\nCC: -14000\n`);
+        cm.setValue(`DEPT: -247000\nNOTE: ข้อมูลพร้อมใช้งานแล้ว ;\n------------------------\nCC: -14000\n`);
       }
       setTimeout(() => cm.refresh(), 100); 
     });
@@ -245,9 +241,9 @@ onAuthStateChanged(auth, (user) => {
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
-      // ตรวจจับเส้นคั่น (---) ให้เป็นสีเทา
+      // ตรวจจับเครื่องหมาย --- ฝั่งซ้ายให้เป็นเส้นคั่นสีเทา
       if (stream.match(/^---+/)) {
-        return "comment";
+        return "divider";
       }
 
       const colonIndex = stream.string.indexOf(':');
@@ -294,7 +290,7 @@ cm.on("scroll", () => {
 /* ---------- ENGINE & PARSER ---------- */
 function normalize(expr) {
   return expr
-    .replace(/[—–]/g, "-") // 🔴 แก้ปัญหา iOS ชอบเปลี่ยน - เป็น — (ขีดเส้นยาว)
+    .replace(/[—–]/g, "-") // แก้ปัญหาคีย์บอร์ด iOS เปลี่ยนขีดเป็นเส้นยาว
     .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
     .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
@@ -341,11 +337,10 @@ function parseBlocks(lines) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0].trim();
     
-    // 🔴 ตรวจจับการพิมพ์ --- เพื่อขึ้นเส้นคั่นใหม่
-    if (/^---+$/.test(line)) {
+    // ตรวจจับ --- ถ้าระบบเจอ จะข้ามบรรทัดนี้ไปเลย ไม่ส่งผลไปด้านขวา
+    if (/^---+/.test(line)) {
       pushCurrent();
-      blocks.push({ type: "divider", line: i });
-      continue;
+      continue; 
     }
 
     if (line === "") { pushCurrent(); continue; }
@@ -376,7 +371,7 @@ function buildBlock(line, expr) {
   const normalized = normalize(expr);
   const cleaned = cleanExpression(normalized);
   const result = safeEval(cleaned);
-  return { type: "math", line, ok: result.ok, value: result.ok ? result.value : null };
+  return { line, ok: result.ok, value: result.ok ? result.value : null };
 }
 
 /* ---------- RENDER ---------- */
@@ -392,15 +387,6 @@ function render() {
     const coord = cm.charCoords({ line: b.line, ch: 0 }, "local");
     const el = document.createElement("div");
 
-    // 🔴 ถ้าระบบเจอว่าก้อนนี้คือเส้นคั่น (Divider) ให้วาดเส้นสีเทา
-    if (b.type === "divider") {
-      el.className = "divider-line";
-      el.style.top = (coord.top + 12) + "px"; // +12 เพื่อให้อยู่กึ่งกลางบรรทัดพอดี
-      canvas.appendChild(el);
-      return;
-    }
-
-    // ถ้าไม่ใช่เส้นคั่น ก็คำนวณและวาดตัวเลขตามปกติ
     el.className = "result";
     el.style.top = coord.top + "px";
 
