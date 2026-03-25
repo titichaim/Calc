@@ -4,14 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc Editor</title>
+<title>Calc Pro</title>
+
+<!-- CodeMirror -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
 
 <style>
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
   background: #000;
   color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 .container {
@@ -19,23 +22,16 @@ body {
   height: calc(100vh - 60px);
 }
 
-/* EDITOR */
-.editor {
+/* editor */
+.CodeMirror {
   width: 50%;
-  padding: 16px;
-  outline: none;
-  overflow-y: auto;
-  white-space: pre-wrap;
+  height: 100%;
+  background: #000;
+  color: #fff;
   font-size: 16px;
-  line-height: 28px;
 }
 
-/* COLORS */
-.num { color: #4cd964; }
-.op { color: #5ac8fa; }
-.text { color: #ffffff; }
-
-/* RIGHT */
+/* right */
 .right {
   width: 50%;
   padding: 16px;
@@ -51,7 +47,7 @@ body {
 .positive { color: #4cd964; }
 .negative { color: #ff3b30; }
 
-/* FOOTER */
+/* footer */
 .footer {
   height: 60px;
   background: #111;
@@ -67,11 +63,8 @@ body {
 <body>
 
 <div class="container">
-
-  <div id="editor" class="editor" contenteditable="true"></div>
-
+  <textarea id="editor"></textarea>
   <div class="right" id="results"></div>
-
 </div>
 
 <div class="footer">
@@ -79,63 +72,30 @@ body {
   <div id="total">0</div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
+
 <script>
-const editor = document.getElementById("editor");
-const resultsDiv = document.getElementById("results");
-const totalDiv = document.getElementById("total");
+/* ---------- INIT EDITOR ---------- */
 
-/* ---------- INIT ---------- */
-editor.innerText = localStorage.getItem("calc-data") || 
-`DEPT: -247,000
-CC: -147,880.61
-GIG: -10k
-
-UOB: 100 + 50`;
-
-updateAll();
-
-/* ---------- EVENTS ---------- */
-editor.addEventListener("input", () => {
-  save();
-  updateAll();
+const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
+  lineNumbers: false,
+  mode: "text",
 });
 
+/* default data */
+cm.setValue(localStorage.getItem("calc-data") || 
+`DEPT: -247000
+CC: -147880.61
+GIG: -10k
+
+UOB: 100 + 50`);
+
 /* ---------- SAVE ---------- */
-function save() {
-  localStorage.setItem("calc-data", editor.innerText);
-}
-
-/* ---------- HIGHLIGHT ---------- */
-
-function highlight(text) {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/(\d+(\.\d+)?)/g, '<span class="num">$1</span>')
-    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
-    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
-}
-
-/* ---------- CARET ---------- */
-
-function setCaretToEnd(el) {
-  const range = document.createRange();
-  const sel = window.getSelection();
-  range.selectNodeContents(el);
-  range.collapse(false);
-  sel.removeAllRanges();
-  sel.addRange(range);
-}
-
-/* ---------- RENDER ---------- */
-
-function updateEditor() {
-  const text = editor.innerText;
-  const html = text.split("\n").map(line => highlight(line)).join("<br>");
-  editor.innerHTML = html;
-  setCaretToEnd(editor); // 👈 ง่ายแต่ยังไม่ perfect
-}
+cm.on("change", () => {
+  const value = cm.getValue();
+  localStorage.setItem("calc-data", value);
+  calculate();
+});
 
 /* ---------- CALC ---------- */
 
@@ -155,9 +115,13 @@ function safeEval(expr) {
 }
 
 function calculate() {
-  const lines = editor.innerText.split("\n");
+  const lines = cm.getValue().split("\n");
+
+  const resultsDiv = document.getElementById("results");
+  const totalDiv = document.getElementById("total");
 
   resultsDiv.innerHTML = "";
+
   let total = 0;
 
   lines.forEach(line => {
@@ -183,12 +147,8 @@ function calculate() {
   totalDiv.textContent = total.toLocaleString();
 }
 
-/* ---------- RUN ---------- */
-
-function updateAll() {
-  updateEditor();
-  calculate();
-}
+/* run first */
+calculate();
 </script>
 
 </body>
