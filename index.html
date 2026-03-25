@@ -241,16 +241,21 @@ onAuthStateChanged(auth, (user) => {
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
-      // ตรวจจับเครื่องหมาย --- ฝั่งซ้ายให้เป็นเส้นคั่นสีเทา
       if (stream.match(/^---+/)) {
         return "divider";
       }
 
-      const colonIndex = stream.string.indexOf(':');
+      // 🔴 แก้ไข: หาตำแหน่ง : ตัว "สุดท้าย" ของบรรทัดแทนตัวแรก
+      const colonIndex = stream.string.lastIndexOf(':');
+      
       if (colonIndex !== -1 && stream.pos <= colonIndex) {
-        if (stream.match(/^[^:]+/)) return null;
-        if (stream.match(/^:/)) return null;
+        // ให้สีขาวกับข้อความทั้งหมดตั้งแต่ต้นจนถึง : ตัวสุดท้าย
+        const textToSkip = stream.string.substring(stream.pos, colonIndex + 1);
+        if (stream.match(textToSkip)) {
+          return null;
+        }
       }
+
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
         return "number"; 
       }
@@ -290,7 +295,7 @@ cm.on("scroll", () => {
 /* ---------- ENGINE & PARSER ---------- */
 function normalize(expr) {
   return expr
-    .replace(/[—–]/g, "-") // แก้ปัญหาคีย์บอร์ด iOS เปลี่ยนขีดเป็นเส้นยาว
+    .replace(/[—–]/g, "-") 
     .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
     .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
@@ -325,7 +330,7 @@ function parseBlocks(lines) {
   function pushCurrent() {
     const trimmedExpr = currentExpr.trim();
     if (trimmedExpr !== "") {
-      if (!trimmedExpr.endsWith(";")) {
+      if (!trimmedExpr.endsWith(";") && !trimmedExpr.endsWith(":")) {
         blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
       }
     }
@@ -337,13 +342,13 @@ function parseBlocks(lines) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0].trim();
     
-    // ตรวจจับ --- ถ้าระบบเจอ จะข้ามบรรทัดนี้ไปเลย ไม่ส่งผลไปด้านขวา
     if (/^---+/.test(line)) {
       pushCurrent();
       continue; 
     }
 
     if (line === "") { pushCurrent(); continue; }
+    
     if (line.includes(":")) {
       pushCurrent();
       startLine = i;
