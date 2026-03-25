@@ -14,6 +14,8 @@ body {
   background: #000;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  /* ป้องกันการเด้งขอบจอของ iOS (Rubber-banding) */
+  overscroll-behavior-y: none; 
 }
 
 /* ---------------- AUTH SCREEN ---------------- */
@@ -73,16 +75,17 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* 🔴 ตั้งค่าสีให้ฝั่งซ้าย (CodeMirror) */
-.cm-number { color: #4cd964 !important; } /* สีเขียว สำหรับตัวเลข */
-.cm-operator { color: #32ade6 !important; } /* สีฟ้า สำหรับเครื่องหมายคณิตศาสตร์ */
-.cm-divider { color: #555 !important; letter-spacing: 2px; } /* สีเทาเข้ม สำหรับ --- */
+.cm-number { color: #4cd964 !important; }
+.cm-operator { color: #32ade6 !important; } 
+.cm-divider { color: #555 !important; letter-spacing: 2px; }
 
 /* RIGHT */
 .right {
   width: 50%;
   position: relative;
   overflow: hidden; 
+  /* ทำให้ฝั่งขวารับการทัชได้ดีขึ้น */
+  touch-action: none; 
 }
 
 .canvas {
@@ -147,7 +150,7 @@ body {
 <div id="app-screen">
   <div class="container">
     <textarea id="editor"></textarea>
-    <div class="right">
+    <div class="right" id="right-panel">
       <div id="canvas" class="canvas"></div>
     </div>
   </div>
@@ -200,6 +203,7 @@ const logoutBtn = document.getElementById("logout-btn");
 const userEmailDisplay = document.getElementById("user-email");
 const canvas = document.getElementById("canvas");
 const totalDiv = document.getElementById("total");
+const rightPanel = document.getElementById("right-panel"); // ดึงฝั่งขวามาใช้งาน
 
 /* ---------- AUTH LOGIC ---------- */
 loginBtn.addEventListener("click", () => {
@@ -242,7 +246,6 @@ CodeMirror.defineMode("calc", function() {
         return "divider";
       }
 
-      // 1. ข้ามข้อความที่อยู่ก่อน : ตัวสุดท้าย (ให้เป็นสีขาว)
       const colonIndex = stream.string.lastIndexOf(':');
       if (colonIndex !== -1 && stream.pos <= colonIndex) {
         const textToSkip = stream.string.substring(stream.pos, colonIndex + 1);
@@ -251,17 +254,14 @@ CodeMirror.defineMode("calc", function() {
         }
       }
 
-      // 2. ถ้าเป็นตัวเลข ให้เป็นสีเขียว
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
         return "number"; 
       }
 
-      // 3. 🔴 เพิ่มใหม่: ถ้าเป็นเครื่องหมายคณิตศาสตร์ ให้เป็นสีฟ้า
       if (stream.match(/^[+\-*/()]/)) {
         return "operator";
       }
 
-      // 4. อื่นๆ (เช่น ช่องว่าง, ตัวอักษรที่ไม่ได้อยู่ก่อน :) ให้เป็นสีขาวปกติ
       stream.next();
       return null;
     }
@@ -289,11 +289,37 @@ cm.on("change", () => {
   }
 });
 
-/* ---------- SCROLL LOGIC ---------- */
+/* ---------- SCROLL LOGIC (SYNC LEFT & RIGHT) ---------- */
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
   canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
+
+// ดักจับการใช้ลูกกลิ้งเมาส์ (Desktop) เลื่อนที่ฝั่งขวา
+rightPanel.addEventListener('wheel', (e) => {
+  const info = cm.getScrollInfo();
+  cm.scrollTo(info.left, info.top + e.deltaY);
+  e.preventDefault(); // ป้องกันการเด้งของ Browser
+}, { passive: false });
+
+// ดักจับการใช้นิ้วเลื่อน (Mobile/Tablet) ที่ฝั่งขวา
+let touchStartY = 0;
+rightPanel.addEventListener('touchstart', (e) => {
+  touchStartY = e.touches[0].clientY;
+}, { passive: true });
+
+rightPanel.addEventListener('touchmove', (e) => {
+  const touchCurrentY = e.touches[0].clientY;
+  const deltaY = touchStartY - touchCurrentY;
+  const info = cm.getScrollInfo();
+  
+  // สั่งให้ฝั่งซ้ายเลื่อนตามนิ้วเรา
+  cm.scrollTo(info.left, info.top + deltaY);
+  touchStartY = touchCurrentY;
+  
+  e.preventDefault(); // ป้องกันขอบจอมือถือเด้งยืดๆ
+}, { passive: false });
+
 
 /* ---------- ENGINE & PARSER ---------- */
 function normalize(expr) {
