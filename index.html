@@ -126,19 +126,25 @@ input.addEventListener("scroll", () => {
 /* ---------- HIGHLIGHT (FIXED) ---------- */
 
 function highlightText(text) {
-  return text
+  // 1. escape ก่อน (กัน HTML พัง)
+  text = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
+    .replace(/>/g, "&gt;");
 
-    // number
-    .replace(/(\d+(\.\d+)?)/g, '<span class="num">$1</span>')
-
-    // operator
-    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
-
-    // text/label
-    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
+  // 2. split เป็น token (ไม่ไปยุ่ง HTML)
+  return text.replace(
+    /(\d+(\.\d+)?)|([+\-*/])|([a-zA-Zก-ฮ:]+)/g,
+    (match) => {
+      if (/^\d/.test(match)) {
+        return `<span class="num">${match}</span>`;
+      }
+      if (/^[+\-*/]$/.test(match)) {
+        return `<span class="op">${match}</span>`;
+      }
+      return `<span class="text">${match}</span>`;
+    }
+  );
 }
 
 function updateHighlight() {
