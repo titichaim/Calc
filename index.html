@@ -4,158 +4,194 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc</title>
+<title>Calc Pro</title>
 
 <style>
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-    background: #000;
-    color: #fff;
-  }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #000;
+  color: #fff;
+}
 
-  .container {
-    display: flex;
-    height: calc(100vh - 60px);
-  }
+.container {
+  display: flex;
+  height: calc(100vh - 60px);
+}
 
-  textarea {
-    width: 50%;
-    background: #000;
-    color: #9fef00;
-    border: none;
-    padding: 16px;
-    font-size: 16px;
-    line-height: 28px;
-    outline: none;
-    resize: none;
-  }
+/* LEFT EDITOR */
+.editor {
+  position: relative;
+  width: 50%;
+}
 
-  .right {
-    width: 50%;
-    padding: 16px;
-    border-left: 1px solid #222;
-    overflow-y: auto;
-  }
+#highlight {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 16px;
+  font-size: 16px;
+  line-height: 28px;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
 
-  .row {
-    height: 28px;
-    display: flex;
-    justify-content: flex-end;
-    font-size: 16px;
-  }
+textarea {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: #9fef00;
+  border: none;
+  outline: none;
+  resize: none;
+  padding: 16px;
+  font-size: 16px;
+  line-height: 28px;
+}
 
-  .positive { color: #4cd964; }
-  .negative { color: #ff3b30; }
+/* COLORS */
+.num { color: #4cd964; }
+.op { color: #5ac8fa; }
+.text { color: #ffffff; }
+.error { color: #ff3b30; }
 
-  .footer {
-    height: 60px;
-    background: #111;
-    border-top: 1px solid #222;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    font-size: 18px;
-  }
+.active-line {
+  background: rgba(255,255,255,0.05);
+}
 
-  .total {
-    font-weight: bold;
-  }
+/* RIGHT */
+.right {
+  width: 50%;
+  padding: 16px;
+  border-left: 1px solid #222;
+}
+
+.row {
+  height: 28px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.positive { color: #4cd964; }
+.negative { color: #ff3b30; }
+
+/* FOOTER */
+.footer {
+  height: 60px;
+  background: #111;
+  border-top: 1px solid #222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+}
 </style>
 </head>
 
 <body>
 
 <div class="container">
-  <textarea id="input"></textarea>
+
+  <div class="editor">
+    <pre id="highlight"></pre>
+    <textarea id="input"></textarea>
+  </div>
+
   <div class="right" id="results"></div>
+
 </div>
 
 <div class="footer">
   <div>Total</div>
-  <div class="total" id="total">0</div>
+  <div id="total">0</div>
 </div>
 
 <script>
 const input = document.getElementById("input");
+const highlight = document.getElementById("highlight");
 const resultsDiv = document.getElementById("results");
 const totalDiv = document.getElementById("total");
 
-// โหลดข้อมูล
 input.value = localStorage.getItem("calc-data") || 
+`Food: 100 + 50
+Taxi: 200*2
+Debt: -10k
 
+Note: hello world`;
+
+updateAll();
 
 input.addEventListener("input", () => {
   localStorage.setItem("calc-data", input.value);
-  calculate();
+  updateAll();
 });
 
-function normalizeExpression(expr) {
+input.addEventListener("scroll", () => {
+  highlight.scrollTop = input.scrollTop;
+});
+
+/* ---------- HIGHLIGHT ---------- */
+
+function highlightLine(line, isActive) {
+  let html = line
+    .replace(/(\d+(\.\d+)?)/g, '<span class="num">$1</span>')
+    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
+    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
+
+  if (isActive) {
+    return `<div class="active-line">${html}</div>`;
+  }
+  return `<div>${html}</div>`;
+}
+
+function updateHighlight() {
+  const lines = input.value.split("\n");
+
+  const cursorPos = input.selectionStart;
+  const beforeCursor = input.value.slice(0, cursorPos);
+  const activeLineIndex = beforeCursor.split("\n").length - 1;
+
+  highlight.innerHTML = lines
+    .map((line, i) => highlightLine(line, i === activeLineIndex))
+    .join("");
+}
+
+/* ---------- PARSER ---------- */
+
+function normalize(expr) {
   return expr
     .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
-    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
-    .trim();
+    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000);
 }
 
 function safeEval(expr) {
   try {
     if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
-    return Function('"use strict"; return (' + expr + ')')();
+    return Function('"use strict";return (' + expr + ')')();
   } catch {
     return null;
   }
 }
 
-function parseLines(lines) {
-  let results = [];
-  let buffer = "";
-
-  for (let i = 0; i < lines.length; i++) {
-    let line = lines[i];
-
-    line = line.split("//")[0];
-
-    if (line.includes(":")) {
-      line = line.split(":").slice(1).join(":");
-    }
-
-    line = normalizeExpression(line);
-
-    if (!line.trim()) {
-      results.push(null);
-      continue;
-    }
-
-    buffer += " " + line;
-
-    if (/[+\-*/]$/.test(line)) {
-      results.push(null);
-      continue;
-    }
-
-    const result = safeEval(buffer);
-    results.push(result);
-    buffer = "";
-  }
-
-  return results;
-}
+/* ---------- CALC ---------- */
 
 function calculate() {
   const lines = input.value.split("\n");
-  const results = parseLines(lines);
 
   resultsDiv.innerHTML = "";
   let total = 0;
 
-  results.forEach(result => {
+  lines.forEach(line => {
+    const expr = normalize(line.split(":").pop());
+    const val = safeEval(expr);
+
     const row = document.createElement("div");
     row.className = "row";
 
-    if (result !== null && !isNaN(result)) {
-      const num = Number(result);
+    if (val !== null && !isNaN(val)) {
+      const num = Number(val);
       row.textContent = num.toLocaleString();
 
       if (num > 0) row.classList.add("positive");
@@ -170,8 +206,12 @@ function calculate() {
   totalDiv.textContent = total.toLocaleString();
 }
 
-// run ครั้งแรก
-calculate();
+/* ---------- RUN ---------- */
+
+function updateAll() {
+  updateHighlight();
+  calculate();
+}
 </script>
 
 </body>
