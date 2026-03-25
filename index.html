@@ -39,7 +39,7 @@ body {
 .right {
   width: 50%;
   position: relative;
-  overflow: hidden; /* ทำหน้าที่เป็นกรอบหน้าต่างนิ่งๆ คอยบังส่วนที่ล้น */
+  overflow: hidden; 
 }
 
 .canvas {
@@ -47,7 +47,7 @@ body {
   top: 0;
   left: 0;
   right: 0;
-  will-change: transform; /* ให้แผ่นด้านในเลื่อนขึ้นลงแทน */
+  will-change: transform; 
 }
 
 .result {
@@ -108,7 +108,7 @@ const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
   mode: "calc",
   lineWrapping: true,
-  viewportMargin: Infinity // วาดทุกบรรทัด เพื่อให้รองรับข้อมูลได้ไม่จำกัดบรรทัด
+  viewportMargin: Infinity 
 });
 
 cm.setValue(localStorage.getItem("calc-data") || 
@@ -137,7 +137,6 @@ cm.on("change", () => {
 
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
-  // แก้ไข: เลื่อนแผ่น canvas ด้านใน แทนการเลื่อนกรอบ .right 
   canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
 
@@ -190,7 +189,6 @@ function parseBlocks(lines) {
   function pushCurrent() {
     const trimmedExpr = currentExpr.trim();
     if (trimmedExpr !== "") {
-      // ตรวจสอบว่าถ้าข้อความ "ไม่ได้" ลงท้ายด้วยเครื่องหมาย ; ให้คำนวณตามปกติ
       if (!trimmedExpr.endsWith(";")) {
         blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
       }
@@ -286,9 +284,13 @@ function render() {
     canvas.appendChild(el);
   });
 
+  // แก้ไข: เคลียร์ค่าติดลบกรณีที่ผลรวมเป็น 0 หรือใกล้เคียง 0 มากๆ
+  if (Math.abs(total) < 0.005) {
+    total = 0;
+  }
+
   totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
-  // จัดตำแหน่ง canvas ให้ตรงกับ Scroll ทันทีหลังจากการคำนวณใหม่
   const scrollInfo = cm.getScrollInfo();
   canvas.style.transform = `translateY(-${scrollInfo.top}px)`;
 }
