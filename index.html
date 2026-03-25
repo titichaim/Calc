@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="th">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,11 +28,9 @@ body {
   color: #fff;
   font-size: 16px;
   line-height: 1.6;
-  /* แก้ไข: บังคับให้ใช้ฟอนต์เดียวกับ Body แทนฟอนต์ Monospace เดิมของระบบ */
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-/* แก้ไข: ใส่สีเขียวสำหรับคลาสตัวเลขใน CodeMirror */
 .cm-number {
   color: #4cd964 !important;
 }
@@ -92,15 +90,12 @@ body {
 <script>
 /* ---------- INIT ---------- */
 
-// แก้ไข: สร้าง Mode ใหม่ชื่อ "calc" เพื่อแยกแยะสีตัวเลข
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
-      // ใช้ Regex ตรวจจับตัวเลข (รองรับลูกน้ำ, ทศนิยม และตัวย่อ k, m)
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
-        return "number"; // จะถูกจับคู่กับ CSS คลาส .cm-number (สีเขียว)
+        return "number"; 
       }
-      // ข้ามตัวอักษรและเครื่องหมายอื่นๆ (ใช้สีขาวตามค่าเริ่มต้นของ CodeMirror)
       stream.next();
       return null;
     }
@@ -109,15 +104,17 @@ CodeMirror.defineMode("calc", function() {
 
 const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
-  mode: "calc", // แก้ไข: เรียกใช้โหมด "calc" ที่เพิ่งสร้างด้านบน
+  mode: "calc",
   lineWrapping: true,
-  viewportMargin: Infinity 
+  viewportMargin: Infinity // วาดทุกบรรทัด เพื่อให้รองรับข้อมูลได้ไม่จำกัดบรรทัด
 });
 
 cm.setValue(localStorage.getItem("calc-data") || 
 `DEPT: -247000
 CC: -147880.61
 GIG: -10k
+
+NOTE: ยอดนี้ยังไม่ต้องคิด 500 + 200 ;
 
 UOB WORLD: 81 + 109 +
 147 + 74 + 79 + 31 +
@@ -189,8 +186,13 @@ function parseBlocks(lines) {
   let startLine = null;
 
   function pushCurrent() {
-    if (currentExpr.trim() !== "") {
-      blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
+    const trimmedExpr = currentExpr.trim();
+    if (trimmedExpr !== "") {
+      // เพิ่มเงื่อนไข: ตรวจสอบว่าถ้าข้อความ "ไม่ได้" ลงท้ายด้วยเครื่องหมาย ; ให้คำนวณตามปกติ
+      // แต่ถ้ามี ; อยู่ท้ายสุด ระบบจะมองข้ามก้อนนี้ไปเลย ไม่นำไปเก็บใน blocks
+      if (!trimmedExpr.endsWith(";")) {
+        blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
+      }
     }
     currentExpr = "";
     startLine = null;
