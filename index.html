@@ -97,7 +97,7 @@ CC: -147880.61
 GIG: -10k
 
 UOB WORLD: 81 + 109 +
-147 + 74 + 79 +
+147 + 74 + 79 + 31 +
 733.27 + 3500 + 50
 `);
 
@@ -134,7 +134,8 @@ function cleanExpression(expr) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[+\-*/]+$/, "")
-    .replace(/^\s*[+\-*/]+/, "");
+    // แก้ไข: ไม่ตัดเครื่องหมาย + และ - ด้านหน้าสุดทิ้ง เพื่อให้ค่าติดลบยังคงอยู่
+    .replace(/^\s*[*\/]+/, ""); 
 }
 
 function safeEval(expr) {
@@ -160,41 +161,47 @@ function safeEval(expr) {
 
 /* ---------- PARSER ---------- */
 
+// แก้ไข: เขียน Parser ใหม่ให้อ่านตาม "การเว้นบรรทัด" และ "เครื่องหมาย :"
 function parseBlocks(lines) {
   const blocks = [];
-  let buffer = "";
+  let currentExpr = "";
   let startLine = null;
 
   for (let i = 0; i < lines.length; i++) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0];
+    let trimmedLine = line.trim();
 
-    if (line.includes(":")) {
-      if (buffer.trim()) {
-        blocks.push(buildBlock(startLine, buffer));
+    // หากเจอบรรทัดว่าง ให้ปิดจบกลุ่มปัจจุบัน
+    if (trimmedLine === "") {
+      if (currentExpr.trim() !== "") {
+        blocks.push(buildBlock(startLine, currentExpr));
       }
-      startLine = i;
-      buffer = line.split(":").slice(1).join(":");
+      currentExpr = "";
+      startLine = null;
       continue;
     }
 
-    if (!buffer && line.trim()) {
-      startLine = i;
-    }
-
-    buffer += " " + line;
-
-    if (!/[+\-*/]$/.test(line.trim())) {
-      if (buffer.trim()) {
-        blocks.push(buildBlock(startLine, buffer));
+    // หากเจอบรรทัดที่มี : แสดงว่าขึ้นกลุ่มใหม่
+    if (trimmedLine.includes(":")) {
+      if (currentExpr.trim() !== "") {
+        blocks.push(buildBlock(startLine, currentExpr));
       }
-      buffer = "";
-      startLine = null;
+      startLine = i;
+      currentExpr = line.substring(line.indexOf(":") + 1);
+    } 
+    // หากไม่ใช่ทั้งสองแบบ ให้นำไปต่อท้ายกลุ่มเดิม
+    else {
+      if (startLine === null) {
+        startLine = i;
+      }
+      currentExpr += " " + line;
     }
   }
 
-  if (buffer.trim()) {
-    blocks.push(buildBlock(startLine, buffer));
+  // ปิดจบกลุ่มสุดท้ายที่ค้างอยู่
+  if (currentExpr.trim() !== "") {
+    blocks.push(buildBlock(startLine, currentExpr));
   }
 
   return blocks;
@@ -235,10 +242,12 @@ function render() {
 
     if (b.ok) {
       const num = b.value;
-      el.textContent = num.toLocaleString();
+      
+      // แสดงจุดทศนิยมสูงสุด 2 ตำแหน่งตามมาตรฐานบัญชี
+      el.textContent = num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
       if (num > 0) el.classList.add("positive");
-      if (num < 0) el.classList.add("negative");
+      if (num < 0) el.classList.add("negative"); // ถ้าค่าน้อยกว่าศูนย์ CSS ตัวนี้จะทำงาน ทำให้กลายเป็นสีแดง
 
       total += num;
     } else {
@@ -249,11 +258,11 @@ function render() {
     canvas.appendChild(el);
   });
 
-  totalDiv.textContent = total.toLocaleString();
+  totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 /* ---------- INIT ---------- */
-render();
+setTimeout(render, 50); // เพิ่ม Delay เล็กน้อยให้ CodeMirror เตรียมการแสดงผลให้เสร็จก่อน
 </script>
 
 </body>
