@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Calc Soulver Style</title>
+
+<style>
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #000;
+    color: #fff;
+  }
+
+  .container {
+    display: flex;
+    height: 100vh;
+  }
+
+  textarea {
+    width: 50%;
+    background: #000;
+    color: #9fef00;
+    border: none;
+    padding: 20px;
+    font-size: 18px;
+    outline: none;
+    resize: none;
+  }
+
+  .right {
+    width: 50%;
+    padding: 20px;
+    border-left: 1px solid #222;
+  }
+
+  .row {
+    height: 28px;
+    display: flex;
+    justify-content: flex-end;
+    font-size: 18px;
+  }
+
+  .positive {
+    color: #4cd964;
+  }
+
+  .negative {
+    color: #ff3b30;
+  }
+
+  .error {
+    color: #888;
+  }
+
+  .footer {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    background: #111;
+    padding: 10px 20px;
+    border-top: 1px solid #222;
+    font-size: 18px;
+  }
+</style>
+
+</head>
+<body>
+
+<div class="container">
+  <textarea id="input"></textarea>
+
+  <div class="right" id="results"></div>
+</div>
+
+<div class="footer">
+  Total: <span id="total">0</span>
+</div>
+
+<script>
+const input = document.getElementById("input");
+const resultsDiv = document.getElementById("results");
+const totalDiv = document.getElementById("total");
+
+// default data
+input.value = localStorage.getItem("calc-data") || 
+`deposit: 20000
+debt: -10000
+credit card: -10000`;
+
+calculate();
+
+input.addEventListener("input", () => {
+  localStorage.setItem("calc-data", input.value);
+  calculate();
+});
+
+function extractExpression(line) {
+  // เอาเฉพาะตัวเลข/เครื่องหมายท้ายบรรทัด
+  const match = line.match(/[-+*/().0-9\s]+$/);
+  return match ? match[0].trim() : "";
+}
+
+function safeEval(expr) {
+  try {
+    if (!/^[0-9+\-*/().\s]+$/.test(expr)) return null;
+    return Function('"use strict"; return (' + expr + ')')();
+  } catch {
+    return null;
+  }
+}
+
+function calculate() {
+  const lines = input.value.split("\n");
+  resultsDiv.innerHTML = "";
+  let total = 0;
+
+  lines.forEach(line => {
+    const expr = extractExpression(line);
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    if (!expr) {
+      resultsDiv.appendChild(row);
+      return;
+    }
+
+    const result = safeEval(expr);
+
+    if (result === null || isNaN(result)) {
+      row.textContent = "";
+      row.classList.add("error");
+    } else {
+      const num = Number(result);
+      row.textContent = num.toLocaleString();
+
+      if (num > 0) row.classList.add("positive");
+      if (num < 0) row.classList.add("negative");
+
+      total += num;
+    }
+
+    resultsDiv.appendChild(row);
+  });
+
+  totalDiv.textContent = total.toLocaleString();
+}
+</script>
+
+</body>
+</html>
