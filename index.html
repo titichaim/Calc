@@ -55,7 +55,7 @@ body {
 
 /* ---------------- APP SCREEN ---------------- */
 #app-screen {
-  display: none; /* ซ่อนไว้จนกว่าจะ Login สำเร็จ */
+  display: none; 
 }
 
 .container {
@@ -74,6 +74,7 @@ body {
 }
 
 .cm-number { color: #4cd964 !important; }
+.cm-comment { color: #555 !important; } /* สีของเส้นประใน CodeMirror */
 
 /* RIGHT */
 .right {
@@ -94,6 +95,15 @@ body {
   position: absolute;
   right: 16px;
   font-size: 16px;
+}
+
+/* ดีไซน์ของเส้นคั่น (Divider) ฝั่งขวา */
+.divider-line {
+  position: absolute;
+  left: 0px;
+  right: 16px;
+  height: 1px;
+  background-color: #333;
 }
 
 .positive { color: #4cd964; }
@@ -169,7 +179,7 @@ import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/fireb
 import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 
 /* =========================================
-   1. ใส่ Firebase Config ของคุณตรงนี้
+   🔴🔴 ใส่ Firebase Config ของคุณตรงนี้ 🔴🔴
 ========================================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCZLADs__pYeCSFChAEkA9dtuqWMZQ0K0c",
@@ -209,26 +219,22 @@ logoutBtn.addEventListener("click", () => {
 
 onAuthStateChanged(auth, (user) => {
   if (user) {
-    // ---- กรณี Login สำเร็จ ----
     authScreen.style.display = "none";
     appScreen.style.display = "block";
     userEmailDisplay.textContent = user.email;
     
-    // ตั้งค่าให้อ่าน/เขียนข้อมูลเฉพาะใน Folder users -> (รหัส UID ของคนๆ นั้น)
     docRef = doc(db, "users", user.uid);
     
-    // โหลดข้อมูลจาก Firebase ของผู้ใช้รายนี้
     getDoc(docRef).then((docSnap) => {
       if (docSnap.exists() && docSnap.data().content !== undefined) {
         cm.setValue(docSnap.data().content);
       } else {
-        cm.setValue(`DEPT: -247000\nNOTE: ข้อมูลส่วนตัวของคุณพร้อมใช้งานแล้ว ;`);
+        cm.setValue(`DEPT: -247000\nNOTE: ข้อมูลพร้อมใช้งานแล้ว ;\n---\nCC: -14000\n`);
       }
-      setTimeout(() => cm.refresh(), 100); // จัดระเบียบหน้าจอ CodeMirror
+      setTimeout(() => cm.refresh(), 100); 
     });
 
   } else {
-    // ---- กรณี Logout หรือยังไม่ได้ Login ----
     authScreen.style.display = "flex";
     appScreen.style.display = "none";
     docRef = null;
@@ -239,6 +245,11 @@ onAuthStateChanged(auth, (user) => {
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
+      // ตรวจจับเส้นคั่น (---) ให้เป็นสีเทา
+      if (stream.match(/^---+/)) {
+        return "comment";
+      }
+
       const colonIndex = stream.string.indexOf(':');
       if (colonIndex !== -1 && stream.pos <= colonIndex) {
         if (stream.match(/^[^:]+/)) return null;
@@ -265,7 +276,6 @@ cm.on("change", () => {
   const val = cm.getValue();
   render();
 
-  // เซฟข้อมูลส่วนตัวลง Firebase (หน่วงเวลา 1 วิ)
   if (docRef) {
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
@@ -284,6 +294,7 @@ cm.on("scroll", () => {
 /* ---------- ENGINE & PARSER ---------- */
 function normalize(expr) {
   return expr
+    .replace(/[—–]/g, "-") // 🔴 แก้ปัญหา iOS ชอบเปลี่ยน - เป็น — (ขีดเส้นยาว)
     .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
     .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
@@ -330,6 +341,13 @@ function parseBlocks(lines) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0].trim();
     
+    // 🔴 ตรวจจับการพิมพ์ --- เพื่อขึ้นเส้นคั่นใหม่
+    if (/^---+$/.test(line)) {
+      pushCurrent();
+      blocks.push({ type: "divider", line: i });
+      continue;
+    }
+
     if (line === "") { pushCurrent(); continue; }
     if (line.includes(":")) {
       pushCurrent();
@@ -358,7 +376,7 @@ function buildBlock(line, expr) {
   const normalized = normalize(expr);
   const cleaned = cleanExpression(normalized);
   const result = safeEval(cleaned);
-  return { line, ok: result.ok, value: result.ok ? result.value : null };
+  return { type: "math", line, ok: result.ok, value: result.ok ? result.value : null };
 }
 
 /* ---------- RENDER ---------- */
@@ -373,6 +391,16 @@ function render() {
   blocks.forEach(b => {
     const coord = cm.charCoords({ line: b.line, ch: 0 }, "local");
     const el = document.createElement("div");
+
+    // 🔴 ถ้าระบบเจอว่าก้อนนี้คือเส้นคั่น (Divider) ให้วาดเส้นสีเทา
+    if (b.type === "divider") {
+      el.className = "divider-line";
+      el.style.top = (coord.top + 12) + "px"; // +12 เพื่อให้อยู่กึ่งกลางบรรทัดพอดี
+      canvas.appendChild(el);
+      return;
+    }
+
+    // ถ้าไม่ใช่เส้นคั่น ก็คำนวณและวาดตัวเลขตามปกติ
     el.className = "result";
     el.style.top = coord.top + "px";
 
