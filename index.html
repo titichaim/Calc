@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
 <title>Calc Pro Sync</title>
 
@@ -14,8 +14,8 @@ body {
   background: #000;
   color: #fff;
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  /* ป้องกันการเด้งขอบจอของ iOS (Rubber-banding) */
-  overscroll-behavior-y: none; 
+  /* 🔴 ล็อคไม่ให้หน้าเว็บ(Body) เลื่อนได้ จะเลื่อนได้เฉพาะช่องพิมพ์เท่านั้น */
+  overflow: hidden; 
 }
 
 /* ---------------- AUTH SCREEN ---------------- */
@@ -24,7 +24,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100vh;
+  height: 100dvh; /* ใช้ dvh เพื่อให้พอดีกับจอมือถือเป๊ะๆ */
   text-align: center;
 }
 
@@ -62,7 +62,8 @@ body {
 
 .container {
   display: flex;
-  height: calc(100vh - 60px);
+  /* 🔴 ใช้ dvh เพื่อให้หักลบกับแถบ URL ของมือถืออัตโนมัติ */
+  height: calc(100dvh - 60px); 
 }
 
 .CodeMirror {
@@ -75,17 +76,15 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.cm-number { color: #4cd964 !important; }
+.cm-number { color: #4cd964 !important; } 
 .cm-operator { color: #32ade6 !important; } 
-.cm-divider { color: #555 !important; letter-spacing: 2px; }
+.cm-divider { color: #555 !important; letter-spacing: 2px; } 
 
 /* RIGHT */
 .right {
   width: 50%;
   position: relative;
   overflow: hidden; 
-  /* ทำให้ฝั่งขวารับการทัชได้ดีขึ้น */
-  touch-action: none; 
 }
 
 .canvas {
@@ -107,6 +106,11 @@ body {
 
 /* FOOTER */
 .footer {
+  /* 🔴 ล็อคแถบ Total ให้ติดขอบล่างเสมอ */
+  position: fixed; 
+  bottom: 0;
+  left: 0;
+  right: 0;
   height: 60px;
   background: #111;
   border-top: 1px solid #222;
@@ -114,6 +118,8 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 0 16px;
+  box-sizing: border-box;
+  z-index: 100; /* ให้อยู่บนสุดเสมอ */
 }
 
 .user-info {
@@ -150,7 +156,7 @@ body {
 <div id="app-screen">
   <div class="container">
     <textarea id="editor"></textarea>
-    <div class="right" id="right-panel">
+    <div class="right">
       <div id="canvas" class="canvas"></div>
     </div>
   </div>
@@ -203,7 +209,6 @@ const logoutBtn = document.getElementById("logout-btn");
 const userEmailDisplay = document.getElementById("user-email");
 const canvas = document.getElementById("canvas");
 const totalDiv = document.getElementById("total");
-const rightPanel = document.getElementById("right-panel"); // ดึงฝั่งขวามาใช้งาน
 
 /* ---------- AUTH LOGIC ---------- */
 loginBtn.addEventListener("click", () => {
@@ -289,37 +294,11 @@ cm.on("change", () => {
   }
 });
 
-/* ---------- SCROLL LOGIC (SYNC LEFT & RIGHT) ---------- */
+/* ---------- SCROLL LOGIC ---------- */
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
   canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
-
-// ดักจับการใช้ลูกกลิ้งเมาส์ (Desktop) เลื่อนที่ฝั่งขวา
-rightPanel.addEventListener('wheel', (e) => {
-  const info = cm.getScrollInfo();
-  cm.scrollTo(info.left, info.top + e.deltaY);
-  e.preventDefault(); // ป้องกันการเด้งของ Browser
-}, { passive: false });
-
-// ดักจับการใช้นิ้วเลื่อน (Mobile/Tablet) ที่ฝั่งขวา
-let touchStartY = 0;
-rightPanel.addEventListener('touchstart', (e) => {
-  touchStartY = e.touches[0].clientY;
-}, { passive: true });
-
-rightPanel.addEventListener('touchmove', (e) => {
-  const touchCurrentY = e.touches[0].clientY;
-  const deltaY = touchStartY - touchCurrentY;
-  const info = cm.getScrollInfo();
-  
-  // สั่งให้ฝั่งซ้ายเลื่อนตามนิ้วเรา
-  cm.scrollTo(info.left, info.top + deltaY);
-  touchStartY = touchCurrentY;
-  
-  e.preventDefault(); // ป้องกันขอบจอมือถือเด้งยืดๆ
-}, { passive: false });
-
 
 /* ---------- ENGINE & PARSER ---------- */
 function normalize(expr) {
