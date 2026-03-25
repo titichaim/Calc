@@ -73,13 +73,10 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.cm-number { color: #4cd964 !important; }
-
-/* ดีไซน์เส้นคั่นฝั่งซ้าย (ตัวอักษร --- ให้เป็นสีเทาเข้ม) */
-.cm-divider { 
-  color: #555 !important; 
-  letter-spacing: 2px;
-}
+/* 🔴 ตั้งค่าสีให้ฝั่งซ้าย (CodeMirror) */
+.cm-number { color: #4cd964 !important; } /* สีเขียว สำหรับตัวเลข */
+.cm-operator { color: #32ade6 !important; } /* สีฟ้า สำหรับเครื่องหมายคณิตศาสตร์ */
+.cm-divider { color: #555 !important; letter-spacing: 2px; } /* สีเทาเข้ม สำหรับ --- */
 
 /* RIGHT */
 .right {
@@ -245,20 +242,26 @@ CodeMirror.defineMode("calc", function() {
         return "divider";
       }
 
-      // 🔴 แก้ไข: หาตำแหน่ง : ตัว "สุดท้าย" ของบรรทัดแทนตัวแรก
+      // 1. ข้ามข้อความที่อยู่ก่อน : ตัวสุดท้าย (ให้เป็นสีขาว)
       const colonIndex = stream.string.lastIndexOf(':');
-      
       if (colonIndex !== -1 && stream.pos <= colonIndex) {
-        // ให้สีขาวกับข้อความทั้งหมดตั้งแต่ต้นจนถึง : ตัวสุดท้าย
         const textToSkip = stream.string.substring(stream.pos, colonIndex + 1);
         if (stream.match(textToSkip)) {
           return null;
         }
       }
 
+      // 2. ถ้าเป็นตัวเลข ให้เป็นสีเขียว
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
         return "number"; 
       }
+
+      // 3. 🔴 เพิ่มใหม่: ถ้าเป็นเครื่องหมายคณิตศาสตร์ ให้เป็นสีฟ้า
+      if (stream.match(/^[+\-*/()]/)) {
+        return "operator";
+      }
+
+      // 4. อื่นๆ (เช่น ช่องว่าง, ตัวอักษรที่ไม่ได้อยู่ก่อน :) ให้เป็นสีขาวปกติ
       stream.next();
       return null;
     }
