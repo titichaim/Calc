@@ -1,85 +1,3 @@
-<!DOCTYPE html>
-<html lang="th">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>Calc Pro</title>
-
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
-
-<style>
-body {
-  margin: 0;
-  background: #000;
-  color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.container {
-  display: flex;
-  height: calc(100vh - 60px);
-}
-
-.CodeMirror {
-  width: 50%;
-  height: 100%;
-  background: #000;
-  color: #fff;
-  font-size: 16px;
-  line-height: 1.6;
-}
-
-/* RIGHT */
-.right {
-  width: 50%;
-  position: relative;
-  overflow: hidden;
-  will-change: transform;
-}
-
-.canvas {
-  position: absolute;
-  inset: 0;
-}
-
-.result {
-  position: absolute;
-  right: 16px;
-  font-size: 16px;
-}
-
-.positive { color: #4cd964; }
-.negative { color: #ff3b30; }
-
-/* FOOTER */
-.footer {
-  height: 60px;
-  background: #111;
-  border-top: 1px solid #222;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 16px;
-}
-</style>
-</head>
-
-<body>
-
-<div class="container">
-  <textarea id="editor"></textarea>
-
-  <div class="right">
-    <div id="canvas" class="canvas"></div>
-  </div>
-</div>
-
-<div class="footer">
-  <div>Total</div>
-  <div id="total">0</div>
-</div>
-
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
 
 <script>
@@ -97,7 +15,7 @@ CC: -147880.61
 GIG: -10k
 
 UOB WORLD: 81 + 109 +
-147 + 74 + 79 + 31 +
+147 + 74 + 79 +
 733.27 + 3500 + 50
 `);
 
@@ -134,8 +52,8 @@ function cleanExpression(expr) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[+\-*/]+$/, "")
-    // แก้ไข: ไม่ตัดเครื่องหมาย + และ - ด้านหน้าสุดทิ้ง เพื่อให้ค่าติดลบยังคงอยู่
-    .replace(/^\s*[*\/]+/, ""); 
+    // ไม่ตัด + หรือ - ด้านหน้าทิ้ง เพื่อรักษาค่าติดลบไว้
+    .replace(/^\s*[*\/]+/, "");
 }
 
 function safeEval(expr) {
@@ -148,7 +66,7 @@ function safeEval(expr) {
 
     const val = Function('"use strict";return (' + expr + ')')();
 
-    if (typeof val !== "number" || isNaN(val)) {
+    if (typeof val !== "number" || isNaN(val) || !isFinite(val)) {
       return { ok: false };
     }
 
@@ -161,7 +79,6 @@ function safeEval(expr) {
 
 /* ---------- PARSER ---------- */
 
-// แก้ไข: เขียน Parser ใหม่ให้อ่านตาม "การเว้นบรรทัด" และ "เครื่องหมาย :"
 function parseBlocks(lines) {
   const blocks = [];
   let currentExpr = "";
@@ -169,38 +86,43 @@ function parseBlocks(lines) {
 
   for (let i = 0; i < lines.length; i++) {
     let raw = lines[i] || "";
-    let line = raw.split("//")[0];
-    let trimmedLine = line.trim();
+    let line = raw.split("//")[0].trim();
+    
+    if (line === "") continue; // ข้ามบรรทัดว่าง
 
-    // หากเจอบรรทัดว่าง ให้ปิดจบกลุ่มปัจจุบัน
-    if (trimmedLine === "") {
-      if (currentExpr.trim() !== "") {
-        blocks.push(buildBlock(startLine, currentExpr));
-      }
-      currentExpr = "";
-      startLine = null;
-      continue;
-    }
-
-    // หากเจอบรรทัดที่มี : แสดงว่าขึ้นกลุ่มใหม่
-    if (trimmedLine.includes(":")) {
-      if (currentExpr.trim() !== "") {
+    // 1. ถ้าเจอบรรทัดที่มีเครื่องหมาย : หมายถึงการบังคับขึ้นกลุ่มใหม่แน่นอน
+    if (line.includes(":")) {
+      if (currentExpr !== "") {
         blocks.push(buildBlock(startLine, currentExpr));
       }
       startLine = i;
-      currentExpr = line.substring(line.indexOf(":") + 1);
+      currentExpr = line.substring(line.indexOf(":") + 1).trim();
+      continue;
+    }
+
+    // เช็คว่าบรรทัดก่อนหน้าลงท้ายด้วยเครื่องหมายคณิตศาสตร์หรือไม่
+    let endsWithOp = /[+\-*/]$/.test(currentExpr.trim());
+    // เช็คว่าบรรทัดใหม่นี้ ขึ้นต้นด้วยเครื่องหมายคณิตศาสตร์หรือไม่
+    let startsWithOp = /^[+\-*/]/.test(line);
+
+    if (currentExpr === "") {
+      startLine = i;
+      currentExpr = line;
     } 
-    // หากไม่ใช่ทั้งสองแบบ ให้นำไปต่อท้ายกลุ่มเดิม
-    else {
-      if (startLine === null) {
-        startLine = i;
-      }
+    // 2. ถ้ามีการเชื่อมด้วยเครื่องหมาย (หน้าหรือหลัง) ให้นำสมการมาต่อกัน
+    else if (endsWithOp || startsWithOp) {
       currentExpr += " " + line;
+    } 
+    // 3. ถ้าไม่มีเครื่องหมายเชื่อมเลย แสดงว่าต้องการขึ้นผลลัพธ์ก้อนใหม่
+    else {
+      blocks.push(buildBlock(startLine, currentExpr));
+      startLine = i;
+      currentExpr = line;
     }
   }
 
-  // ปิดจบกลุ่มสุดท้ายที่ค้างอยู่
-  if (currentExpr.trim() !== "") {
+  // ปิดจบกลุ่มสุดท้ายที่ค้างอยู่ใน Buffer
+  if (currentExpr !== "") {
     blocks.push(buildBlock(startLine, currentExpr));
   }
 
@@ -242,15 +164,14 @@ function render() {
 
     if (b.ok) {
       const num = b.value;
-      
-      // แสดงจุดทศนิยมสูงสุด 2 ตำแหน่งตามมาตรฐานบัญชี
       el.textContent = num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
       if (num > 0) el.classList.add("positive");
-      if (num < 0) el.classList.add("negative"); // ถ้าค่าน้อยกว่าศูนย์ CSS ตัวนี้จะทำงาน ทำให้กลายเป็นสีแดง
+      if (num < 0) el.classList.add("negative");
 
       total += num;
     } else {
+      // หากบรรทัดไหนพิมพ์สมการผิด จะแสดงผลขีดกลางสีเทา เพื่อให้รู้ว่าเกิด Error
       el.textContent = "—";
       el.style.opacity = 0.3;
     }
@@ -262,8 +183,5 @@ function render() {
 }
 
 /* ---------- INIT ---------- */
-setTimeout(render, 50); // เพิ่ม Delay เล็กน้อยให้ CodeMirror เตรียมการแสดงผลให้เสร็จก่อน
+setTimeout(render, 50);
 </script>
-
-</body>
-</html>
