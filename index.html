@@ -1,3 +1,85 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Calc Pro</title>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
+
+<style>
+body {
+  margin: 0;
+  background: #000;
+  color: #fff;
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.container {
+  display: flex;
+  height: calc(100vh - 60px);
+}
+
+.CodeMirror {
+  width: 50%;
+  height: 100%;
+  background: #000;
+  color: #fff;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+/* RIGHT */
+.right {
+  width: 50%;
+  position: relative;
+  overflow: hidden;
+  will-change: transform;
+}
+
+.canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.result {
+  position: absolute;
+  right: 16px;
+  font-size: 16px;
+}
+
+.positive { color: #4cd964; }
+.negative { color: #ff3b30; } /* สีแดงสำหรับค่าติดลบ */
+
+/* FOOTER */
+.footer {
+  height: 60px;
+  background: #111;
+  border-top: 1px solid #222;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 16px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+  <textarea id="editor"></textarea>
+
+  <div class="right">
+    <div id="canvas" class="canvas"></div>
+  </div>
+</div>
+
+<div class="footer">
+  <div>Total</div>
+  <div id="total">0</div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
 
 <script>
@@ -15,7 +97,7 @@ CC: -147880.61
 GIG: -10k
 
 UOB WORLD: 81 + 109 +
-147 + 74 + 79 +
+147 + 74 + 79 + 31 +
 733.27 + 3500 + 50
 `);
 
@@ -52,7 +134,7 @@ function cleanExpression(expr) {
     .replace(/\s+/g, " ")
     .trim()
     .replace(/[+\-*/]+$/, "")
-    // ไม่ตัด + หรือ - ด้านหน้าทิ้ง เพื่อรักษาค่าติดลบไว้
+    // ไม่ตัดเครื่องหมาย + หรือ - ด้านหน้าสุดทิ้ง เพื่อรักษาค่าติดลบไว้
     .replace(/^\s*[*\/]+/, "");
 }
 
@@ -66,6 +148,7 @@ function safeEval(expr) {
 
     const val = Function('"use strict";return (' + expr + ')')();
 
+    // เช็คค่า Infinity กรณีหารด้วย 0 ด้วย isFinite
     if (typeof val !== "number" || isNaN(val) || !isFinite(val)) {
       return { ok: false };
     }
@@ -90,7 +173,7 @@ function parseBlocks(lines) {
     
     if (line === "") continue; // ข้ามบรรทัดว่าง
 
-    // 1. ถ้าเจอบรรทัดที่มีเครื่องหมาย : หมายถึงการบังคับขึ้นกลุ่มใหม่แน่นอน
+    // 1. ถ้าเจอบรรทัดที่มีเครื่องหมาย : หมายถึงการบังคับขึ้นกลุ่มใหม่
     if (line.includes(":")) {
       if (currentExpr !== "") {
         blocks.push(buildBlock(startLine, currentExpr));
@@ -164,14 +247,15 @@ function render() {
 
     if (b.ok) {
       const num = b.value;
+      // จัดฟอร์แมตตัวเลขให้มีลูกน้ำ และมีทศนิยมสูงสุด 2 ตำแหน่ง
       el.textContent = num.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
       if (num > 0) el.classList.add("positive");
-      if (num < 0) el.classList.add("negative");
+      if (num < 0) el.classList.add("negative"); // ใส่คลาส .negative ให้ตัวหนังสือเป็นสีแดง
 
       total += num;
     } else {
-      // หากบรรทัดไหนพิมพ์สมการผิด จะแสดงผลขีดกลางสีเทา เพื่อให้รู้ว่าเกิด Error
+      // หากบรรทัดไหนพิมพ์สมการผิด จะแสดงผลขีดกลางสีเทา เพื่อให้รู้ว่ามีข้อผิดพลาด
       el.textContent = "—";
       el.style.opacity = 0.3;
     }
@@ -179,9 +263,14 @@ function render() {
     canvas.appendChild(el);
   });
 
+  // อัปเดตยอดรวมด้านล่าง
   totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 /* ---------- INIT ---------- */
-setTimeout(render, 50);
+// เพิ่ม Delay เล็กน้อยตอนโหลดครั้งแรก เพื่อให้ CodeMirror คำนวณความสูงบรรทัดเสร็จก่อน
+setTimeout(render, 50); 
 </script>
+
+</body>
+</html>
