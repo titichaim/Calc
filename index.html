@@ -6,7 +6,6 @@
 
 <title>Calc Pro</title>
 
-<!-- CodeMirror -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
 
 <style>
@@ -22,7 +21,6 @@ body {
   height: calc(100vh - 60px);
 }
 
-/* editor */
 .CodeMirror {
   width: 50%;
   height: 100%;
@@ -31,23 +29,22 @@ body {
   font-size: 16px;
 }
 
-/* right */
+/* RIGHT */
 .right {
   width: 50%;
-  padding: 16px;
-  border-left: 1px solid #222;
+  position: relative;
 }
 
-.row {
-  height: 28px;
-  display: flex;
-  justify-content: flex-end;
+.result {
+  position: absolute;
+  right: 16px;
+  font-size: 16px;
 }
 
 .positive { color: #4cd964; }
 .negative { color: #ff3b30; }
 
-/* footer */
+/* FOOTER */
 .footer {
   height: 60px;
   background: #111;
@@ -75,29 +72,37 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
 
 <script>
-/* ---------- INIT EDITOR ---------- */
-
 const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
   mode: "text",
+  lineWrapping: true
 });
 
-/* default data */
 cm.setValue(localStorage.getItem("calc-data") || 
 `DEPT: -247000
 CC: -147880.61
 GIG: -10k
 
-UOB: 100 + 50`);
+UOB WORLD: 81 + 109 +
+147 + 74 + 79 +
+733.27 + 3500 + 50
 
-/* ---------- SAVE ---------- */
+UOB ONE: 45 + 22 + 47 +
+45 - 63.50 + 145 + 272 -
+16 + 47 + 16 + 33 + 50
+`);
+
 cm.on("change", () => {
-  const value = cm.getValue();
-  localStorage.setItem("calc-data", value);
+  localStorage.setItem("calc-data", cm.getValue());
   calculate();
 });
 
-/* ---------- CALC ---------- */
+cm.on("scroll", () => {
+  const scroll = cm.getScrollInfo();
+  document.getElementById("results").scrollTop = scroll.top;
+});
+
+/* ---------- CALC ENGINE ---------- */
 
 function normalize(expr) {
   return expr
@@ -114,40 +119,81 @@ function safeEval(expr) {
   }
 }
 
-function calculate() {
-  const lines = cm.getValue().split("\n");
+/* ---------- BLOCK PARSER ---------- */
 
+function parseBlocks(lines) {
+  let blocks = [];
+  let current = { start: 0, expr: "" };
+
+  lines.forEach((line, i) => {
+    if (line.includes(":")) {
+      if (current.expr.trim()) {
+        blocks.push(current);
+      }
+
+      current = {
+        start: i,
+        expr: line.split(":").slice(1).join(":")
+      };
+    } else {
+      current.expr += " " + line;
+    }
+  });
+
+  if (current.expr.trim()) blocks.push(current);
+
+  return blocks.map(b => {
+    const val = safeEval(normalize(b.expr));
+    return {
+      line: b.start,
+      value: val
+    };
+  });
+}
+
+/* ---------- RENDER ---------- */
+
+function calculate() {
   const resultsDiv = document.getElementById("results");
   const totalDiv = document.getElementById("total");
 
   resultsDiv.innerHTML = "";
 
+  const lineCount = cm.lineCount();
+  const lines = [];
+
+  for (let i = 0; i < lineCount; i++) {
+    lines.push(cm.getLine(i) || "");
+  }
+
+  const blocks = parseBlocks(lines);
+
   let total = 0;
 
-  lines.forEach(line => {
-    const expr = normalize(line.split(":").pop());
-    const val = safeEval(expr);
+  blocks.forEach(block => {
+    if (block.value === null || isNaN(block.value)) return;
 
-    const row = document.createElement("div");
-    row.className = "row";
+    const num = Number(block.value);
 
-    if (val !== null && !isNaN(val)) {
-      const num = Number(val);
-      row.textContent = num.toLocaleString();
+    const coord = cm.charCoords({ line: block.line, ch: 0 }, "local");
 
-      if (num > 0) row.classList.add("positive");
-      if (num < 0) row.classList.add("negative");
+    const el = document.createElement("div");
+    el.className = "result";
+    el.style.top = coord.top + "px";
+    el.textContent = num.toLocaleString();
 
-      total += num;
-    }
+    if (num > 0) el.classList.add("positive");
+    if (num < 0) el.classList.add("negative");
 
-    resultsDiv.appendChild(row);
+    resultsDiv.appendChild(el);
+
+    total += num;
   });
 
   totalDiv.textContent = total.toLocaleString();
 }
 
-/* run first */
+/* init */
 calculate();
 </script>
 
