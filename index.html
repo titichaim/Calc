@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc Stable</title>
+<title>Calc Editor</title>
 
 <style>
 body {
@@ -19,32 +19,13 @@ body {
   height: calc(100vh - 60px);
 }
 
-/* LEFT */
+/* EDITOR */
 .editor {
-  position: relative;
   width: 50%;
-}
-
-#highlight {
-  position: absolute;
-  inset: 0;
   padding: 16px;
-  font-size: 16px;
-  line-height: 28px;
-  white-space: pre-wrap;
-  pointer-events: none;
-}
-
-textarea {
-  position: absolute;
-  inset: 0;
-  background: transparent;
-  color: transparent;
-  caret-color: #9fef00;
-  border: none;
   outline: none;
-  resize: none;
-  padding: 16px;
+  overflow-y: auto;
+  white-space: pre-wrap;
   font-size: 16px;
   line-height: 28px;
 }
@@ -59,7 +40,6 @@ textarea {
   width: 50%;
   padding: 16px;
   border-left: 1px solid #222;
-  overflow-y: auto;
 }
 
 .row {
@@ -88,10 +68,7 @@ textarea {
 
 <div class="container">
 
-  <div class="editor">
-    <pre id="highlight"></pre>
-    <textarea id="input"></textarea>
-  </div>
+  <div id="editor" class="editor" contenteditable="true"></div>
 
   <div class="right" id="results"></div>
 
@@ -103,13 +80,12 @@ textarea {
 </div>
 
 <script>
-const input = document.getElementById("input");
-const highlight = document.getElementById("highlight");
+const editor = document.getElementById("editor");
 const resultsDiv = document.getElementById("results");
 const totalDiv = document.getElementById("total");
 
 /* ---------- INIT ---------- */
-input.value = localStorage.getItem("calc-data") || 
+editor.innerText = localStorage.getItem("calc-data") || 
 `DEPT: -247,000
 CC: -147,880.61
 GIG: -10k
@@ -119,47 +95,50 @@ UOB: 100 + 50`;
 updateAll();
 
 /* ---------- EVENTS ---------- */
-input.addEventListener("input", () => {
-  try {
-    localStorage.setItem("calc-data", input.value);
-    updateAll();
-  } catch (e) {
-    console.error("update error:", e);
-  }
+editor.addEventListener("input", () => {
+  save();
+  updateAll();
 });
 
-input.addEventListener("scroll", () => {
-  highlight.scrollTop = input.scrollTop;
-});
-
-/* ---------- HIGHLIGHT (SAFE) ---------- */
-function highlightText(text) {
-  // escape ก่อน
-  text = text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-
-  return text.replace(
-    /(\d+(\.\d+)?)|([+\-*/])|([a-zA-Zก-ฮ:]+)/g,
-    (match) => {
-      if (/^\d/.test(match)) return `<span class="num">${match}</span>`;
-      if (/^[+\-*/]$/.test(match)) return `<span class="op">${match}</span>`;
-      return `<span class="text">${match}</span>`;
-    }
-  );
+/* ---------- SAVE ---------- */
+function save() {
+  localStorage.setItem("calc-data", editor.innerText);
 }
 
-function updateHighlight() {
-  try {
-    highlight.innerHTML = highlightText(input.value);
-  } catch (e) {
-    console.error("highlight error:", e);
-    highlight.innerText = input.value; // fallback กันพัง
-  }
+/* ---------- HIGHLIGHT ---------- */
+
+function highlight(text) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/(\d+(\.\d+)?)/g, '<span class="num">$1</span>')
+    .replace(/([+\-*/])/g, '<span class="op">$1</span>')
+    .replace(/([a-zA-Zก-ฮ:]+)/g, '<span class="text">$1</span>');
+}
+
+/* ---------- CARET ---------- */
+
+function setCaretToEnd(el) {
+  const range = document.createRange();
+  const sel = window.getSelection();
+  range.selectNodeContents(el);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/* ---------- RENDER ---------- */
+
+function updateEditor() {
+  const text = editor.innerText;
+  const html = text.split("\n").map(line => highlight(line)).join("<br>");
+  editor.innerHTML = html;
+  setCaretToEnd(editor); // 👈 ง่ายแต่ยังไม่ perfect
 }
 
 /* ---------- CALC ---------- */
+
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
@@ -176,7 +155,7 @@ function safeEval(expr) {
 }
 
 function calculate() {
-  const lines = input.value.split("\n");
+  const lines = editor.innerText.split("\n");
 
   resultsDiv.innerHTML = "";
   let total = 0;
@@ -205,8 +184,9 @@ function calculate() {
 }
 
 /* ---------- RUN ---------- */
+
 function updateAll() {
-  updateHighlight();
+  updateEditor();
   calculate();
 }
 </script>
