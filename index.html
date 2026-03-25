@@ -27,14 +27,25 @@ body {
   background: #000;
   color: #fff;
   font-size: 16px;
+  line-height: 1.6;
 }
 
-/* RIGHT */
+/* RIGHT LAYER */
 .right {
   width: 50%;
   position: relative;
+  overflow: hidden;
+  will-change: transform;
 }
 
+.canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+}
+
+/* RESULT */
 .result {
   position: absolute;
   right: 16px;
@@ -61,7 +72,10 @@ body {
 
 <div class="container">
   <textarea id="editor"></textarea>
-  <div class="right" id="results"></div>
+
+  <div class="right">
+    <div id="canvas" class="canvas"></div>
+  </div>
 </div>
 
 <div class="footer">
@@ -72,6 +86,8 @@ body {
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
 
 <script>
+/* ---------- INIT ---------- */
+
 const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
   mode: "text",
@@ -89,25 +105,33 @@ UOB WORLD: 81 + 109 +
 
 UOB ONE: 45 + 22 + 47 +
 45 - 63.50 + 145 + 272 -
-16 + 47 + 16 + 33 + 50
-`);
+16 + 47 + 16 + 33 + 50`);
+
+const canvas = document.getElementById("canvas");
+const totalDiv = document.getElementById("total");
+
+/* ---------- SAVE ---------- */
 
 cm.on("change", () => {
   localStorage.setItem("calc-data", cm.getValue());
-  calculate();
+  render();
 });
+
+/* ---------- SCROLL SYNC ---------- */
 
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
-  document.getElementById("results").scrollTop = scroll.top;
+  document.querySelector(".right").style.transform =
+    `translateY(-${scroll.top}px)`;
 });
 
-/* ---------- CALC ENGINE ---------- */
+/* ---------- MATH ---------- */
 
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
-    .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000);
+    .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
+    .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000);
 }
 
 function safeEval(expr) {
@@ -119,46 +143,58 @@ function safeEval(expr) {
   }
 }
 
-/* ---------- BLOCK PARSER ---------- */
+/* ---------- PARSER (PRO) ---------- */
 
 function parseBlocks(lines) {
-  let blocks = [];
-  let current = { start: 0, expr: "" };
+  const blocks = [];
+  let buffer = "";
+  let startLine = null;
 
-  lines.forEach((line, i) => {
+  for (let i = 0; i < lines.length; i++) {
+    let raw = lines[i];
+    let line = raw.split("//")[0];
+
     if (line.includes(":")) {
-      if (current.expr.trim()) {
-        blocks.push(current);
+      // flush ก่อนหน้า
+      if (buffer.trim()) {
+        blocks.push({ line: startLine, expr: buffer });
       }
 
-      current = {
-        start: i,
-        expr: line.split(":").slice(1).join(":")
-      };
-    } else {
-      current.expr += " " + line;
+      startLine = i;
+      buffer = line.split(":").slice(1).join(":");
+      continue;
     }
-  });
 
-  if (current.expr.trim()) blocks.push(current);
+    if (!buffer && line.trim()) {
+      // line ไม่มี label แต่มี expression
+      startLine = i;
+    }
 
-  return blocks.map(b => {
-    const val = safeEval(normalize(b.expr));
-    return {
-      line: b.start,
-      value: val
-    };
-  });
+    buffer += " " + line;
+
+    // ถ้าจบ expression
+    if (!/[+\-*/]$/.test(line.trim())) {
+      if (buffer.trim()) {
+        blocks.push({ line: startLine, expr: buffer });
+      }
+      buffer = "";
+      startLine = null;
+    }
+  }
+
+  if (buffer.trim()) {
+    blocks.push({ line: startLine, expr: buffer });
+  }
+
+  return blocks.map(b => ({
+    line: b.line,
+    value: safeEval(normalize(b.expr))
+  }));
 }
 
-/* ---------- RENDER ---------- */
+/* ---------- RENDER ENGINE ---------- */
 
-function calculate() {
-  const resultsDiv = document.getElementById("results");
-  const totalDiv = document.getElementById("total");
-
-  resultsDiv.innerHTML = "";
-
+function render() {
   const lineCount = cm.lineCount();
   const lines = [];
 
@@ -168,33 +204,33 @@ function calculate() {
 
   const blocks = parseBlocks(lines);
 
+  canvas.innerHTML = "";
   let total = 0;
 
-  blocks.forEach(block => {
-    if (block.value === null || isNaN(block.value)) return;
+  blocks.forEach(b => {
+    if (b.value === null || isNaN(b.value)) return;
 
-    const num = Number(block.value);
-
-    const coord = cm.charCoords({ line: block.line, ch: 0 }, "local");
+    const coord = cm.charCoords({ line: b.line, ch: 0 }, "local");
 
     const el = document.createElement("div");
     el.className = "result";
     el.style.top = coord.top + "px";
+
+    const num = Number(b.value);
     el.textContent = num.toLocaleString();
 
     if (num > 0) el.classList.add("positive");
     if (num < 0) el.classList.add("negative");
 
-    resultsDiv.appendChild(el);
-
+    canvas.appendChild(el);
     total += num;
   });
 
   totalDiv.textContent = total.toLocaleString();
 }
 
-/* init */
-calculate();
+/* ---------- INIT RUN ---------- */
+render();
 </script>
 
 </body>
