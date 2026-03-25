@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc Pro</title>
+<title>Calc Pro Sync</title>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.css">
 
@@ -89,28 +89,41 @@ body {
 
 <script src="https://cdn.jsdelivr.net/npm/codemirror@5.65.16/lib/codemirror.js"></script>
 
-<script>
-/* ---------- INIT ---------- */
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
+
+/* =========================================
+   1. ใส่การตั้งค่า Firebase ของคุณตรงนี้
+========================================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCZLADs__pYeCSFChAEkA9dtuqWMZQ0K0c",
+  authDomain: "calc-10427.firebaseapp.com",
+  projectId: "calc-10427",
+  storageBucket: "calc-10427.firebasestorage.app",
+  messagingSenderId: "636760379592",
+  appId: "1:636760379592:web:79e917e03b29586f5e55fd",
+  measurementId: "G-656Y5L5ZCM"
+};
+// เริ่มต้นใช้งาน Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+// ตั้งชื่อ Collection ว่า "calculator" และ Document ชื่อ "myData"
+const docRef = doc(db, "calculator", "myData"); 
+
+/* ---------- INIT CODEMIRROR ---------- */
 
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
-      // หาตำแหน่งของเครื่องหมาย : ในบรรทัดนั้น
       const colonIndex = stream.string.indexOf(':');
-
-      // ถ้าบรรทัดนี้มี : และตัวอ่านข้อความยังอยู่ก่อนหรือตรงกับ : ให้ข้ามไปเลยไม่ต้องลงสี
       if (colonIndex !== -1 && stream.pos <= colonIndex) {
-        // อ่านข้อความไปเรื่อยๆ จนกว่าจะเจอ : แล้วให้ค่า null (สีขาวปกติ)
         if (stream.match(/^[^:]+/)) return null;
-        // อ่านตัวเครื่องหมาย : เอง แล้วให้ค่า null
         if (stream.match(/^:/)) return null;
       }
-
-      // ถ้าผ่าน : มาแล้ว หรือบรรทัดนั้นไม่มี : (เช่นบรรทัดที่เป็นสมการต่อกัน) ค่อยทำสีเขียวที่ตัวเลข
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
         return "number"; 
       }
-      
       stream.next();
       return null;
     }
@@ -124,28 +137,44 @@ const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   viewportMargin: Infinity 
 });
 
-cm.setValue(localStorage.getItem("calc-data") || 
-`DEPT: -247000
-CC: -147880.61
-GIG: -10k
-
-NOTE: ยอดนี้ยังไม่ต้องคิด 500 + 200 ;
-
-UOB 1: 81 + 109 +
-147 + 74 + 79 + 31 +
-733.27 + 3500 + 50
-
-ip16: 23400 - (2340 * 7)
-`);
+// โหลดข้อมูลเบื้องต้นจากเครื่องก่อน (เพื่อให้หน้าเว็บแสดงผลทันที ไม่ต้องรอเน็ต)
+cm.setValue(localStorage.getItem("calc-data") || `กำลังเชื่อมต่อ Firebase...`);
 
 const canvas = document.getElementById("canvas");
 const totalDiv = document.getElementById("total");
 
-/* ---------- SAVE ---------- */
+/* =========================================
+   2. ดึงข้อมูลจาก Firebase มาแสดงทับ
+========================================= */
+getDoc(docRef).then((docSnap) => {
+  if (docSnap.exists() && docSnap.data().content !== undefined) {
+    const firebaseData = docSnap.data().content;
+    cm.setValue(firebaseData); // อัปเดตหน้าจอเป็นข้อมูลจาก Firebase
+    localStorage.setItem("calc-data", firebaseData); // อัปเดตเครื่องตัวเองให้ตรงกัน
+  } else {
+    cm.setValue(`DEPT: -247000\nNOTE: ลองลบและพิมพ์ข้อมูลของคุณได้เลยครับ`);
+  }
+}).catch(err => {
+  console.error("โหลด Firebase ไม่สำเร็จ (อาจยังไม่ได้เปิดสิทธิ์ Rules):", err);
+});
+
+/* =========================================
+   3. ระบบ Save ลง Firebase (พร้อม Debounce)
+========================================= */
+let saveTimeout = null;
 
 cm.on("change", () => {
-  localStorage.setItem("calc-data", cm.getValue());
+  const val = cm.getValue();
+  localStorage.setItem("calc-data", val); // เซฟลงเครื่องทันที
   render();
+
+  // หน่วงเวลาเซฟลง Firebase 1 วินาที (ถ้าพิมพ์ต่อเวลาจะถูกรีเซ็ตใหม่)
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    setDoc(docRef, { content: val }, { merge: true })
+      .then(() => console.log("ซิงค์ข้อมูลลง Firebase สำเร็จ!"))
+      .catch(err => console.error("เซฟลง Firebase ไม่สำเร็จ:", err));
+  }, 1000); 
 });
 
 /* ---------- SCROLL ---------- */
@@ -155,7 +184,7 @@ cm.on("scroll", () => {
   canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
 
-/* ---------- ENGINE ---------- */
+/* ---------- ENGINE & PARSER ---------- */
 
 function normalize(expr) {
   return expr
@@ -176,25 +205,14 @@ function cleanExpression(expr) {
 function safeEval(expr) {
   try {
     if (!expr) return { ok: false };
-
-    if (!/^[0-9+\-*/().\s]+$/.test(expr)) {
-      return { ok: false };
-    }
-
+    if (!/^[0-9+\-*/().\s]+$/.test(expr)) return { ok: false };
     const val = Function('"use strict";return (' + expr + ')')();
-
-    if (typeof val !== "number" || isNaN(val) || !isFinite(val)) {
-      return { ok: false };
-    }
-
+    if (typeof val !== "number" || isNaN(val) || !isFinite(val)) return { ok: false };
     return { ok: true, value: val };
-
   } catch {
     return { ok: false };
   }
 }
-
-/* ---------- PARSER ---------- */
 
 function parseBlocks(lines) {
   const blocks = [];
@@ -216,11 +234,7 @@ function parseBlocks(lines) {
     let raw = lines[i] || "";
     let line = raw.split("//")[0].trim();
     
-    if (line === "") {
-      pushCurrent();
-      continue;
-    }
-
+    if (line === "") { pushCurrent(); continue; }
     if (line.includes(":")) {
       pushCurrent();
       startLine = i;
@@ -232,21 +246,15 @@ function parseBlocks(lines) {
     let startsWithOp = /^[+\-*/)]/.test(line);
 
     if (currentExpr === "") {
-      startLine = i;
-      currentExpr = line;
-    } 
-    else if (endsWithOp || startsWithOp) {
+      startLine = i; currentExpr = line;
+    } else if (endsWithOp || startsWithOp) {
       currentExpr += " " + line;
-    } 
-    else {
+    } else {
       pushCurrent();
-      startLine = i;
-      currentExpr = line;
+      startLine = i; currentExpr = line;
     }
   }
-
   pushCurrent();
-
   return blocks;
 }
 
@@ -254,31 +262,21 @@ function buildBlock(line, expr) {
   const normalized = normalize(expr);
   const cleaned = cleanExpression(normalized);
   const result = safeEval(cleaned);
-
-  return {
-    line,
-    ok: result.ok,
-    value: result.ok ? result.value : null
-  };
+  return { line, ok: result.ok, value: result.ok ? result.value : null };
 }
 
 /* ---------- RENDER ---------- */
 
 function render() {
   canvas.innerHTML = "";
-
   const lines = [];
-  for (let i = 0; i < cm.lineCount(); i++) {
-    lines.push(cm.getLine(i));
-  }
-
+  for (let i = 0; i < cm.lineCount(); i++) lines.push(cm.getLine(i));
+  
   const blocks = parseBlocks(lines);
-
   let total = 0;
 
   blocks.forEach(b => {
     const coord = cm.charCoords({ line: b.line, ch: 0 }, "local");
-
     const el = document.createElement("div");
     el.className = "result";
     el.style.top = coord.top + "px";
@@ -286,23 +284,17 @@ function render() {
     if (b.ok) {
       const num = b.value;
       el.textContent = num.toLocaleString('en-US', { maximumFractionDigits: 2 });
-
       if (num > 0) el.classList.add("positive");
       if (num < 0) el.classList.add("negative");
-
       total += num;
     } else {
       el.textContent = "—";
       el.style.opacity = 0.3;
     }
-
     canvas.appendChild(el);
   });
 
-  if (Math.abs(total) < 0.005) {
-    total = 0;
-  }
-
+  if (Math.abs(total) < 0.005) total = 0;
   totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
 
   const scrollInfo = cm.getScrollInfo();
