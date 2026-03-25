@@ -95,9 +95,22 @@ body {
 CodeMirror.defineMode("calc", function() {
   return {
     token: function(stream) {
+      // หาตำแหน่งของเครื่องหมาย : ในบรรทัดนั้น
+      const colonIndex = stream.string.indexOf(':');
+
+      // ถ้าบรรทัดนี้มี : และตัวอ่านข้อความยังอยู่ก่อนหรือตรงกับ : ให้ข้ามไปเลยไม่ต้องลงสี
+      if (colonIndex !== -1 && stream.pos <= colonIndex) {
+        // อ่านข้อความไปเรื่อยๆ จนกว่าจะเจอ : แล้วให้ค่า null (สีขาวปกติ)
+        if (stream.match(/^[^:]+/)) return null;
+        // อ่านตัวเครื่องหมาย : เอง แล้วให้ค่า null
+        if (stream.match(/^:/)) return null;
+      }
+
+      // ถ้าผ่าน : มาแล้ว หรือบรรทัดนั้นไม่มี : (เช่นบรรทัดที่เป็นสมการต่อกัน) ค่อยทำสีเขียวที่ตัวเลข
       if (stream.match(/^[0-9,]+(\.[0-9]+)?([kKmM]?)/)) {
         return "number"; 
       }
+      
       stream.next();
       return null;
     }
@@ -118,9 +131,11 @@ GIG: -10k
 
 NOTE: ยอดนี้ยังไม่ต้องคิด 500 + 200 ;
 
-UOB WORLD: 81 + 109 +
+UOB 1: 81 + 109 +
 147 + 74 + 79 + 31 +
 733.27 + 3500 + 50
+
+ip16: 23400 - (2340 * 7)
 `);
 
 const canvas = document.getElementById("canvas");
@@ -284,7 +299,6 @@ function render() {
     canvas.appendChild(el);
   });
 
-  // แก้ไข: เคลียร์ค่าติดลบกรณีที่ผลรวมเป็น 0 หรือใกล้เคียง 0 มากๆ
   if (Math.abs(total) < 0.005) {
     total = 0;
   }
