@@ -39,13 +39,15 @@ body {
 .right {
   width: 50%;
   position: relative;
-  overflow: hidden;
-  will-change: transform;
+  overflow: hidden; /* ทำหน้าที่เป็นกรอบหน้าต่างนิ่งๆ คอยบังส่วนที่ล้น */
 }
 
 .canvas {
   position: absolute;
-  inset: 0;
+  top: 0;
+  left: 0;
+  right: 0;
+  will-change: transform; /* ให้แผ่นด้านในเลื่อนขึ้นลงแทน */
 }
 
 .result {
@@ -135,8 +137,8 @@ cm.on("change", () => {
 
 cm.on("scroll", () => {
   const scroll = cm.getScrollInfo();
-  document.querySelector(".right").style.transform =
-    `translateY(-${scroll.top}px)`;
+  // แก้ไข: เลื่อนแผ่น canvas ด้านใน แทนการเลื่อนกรอบ .right 
+  canvas.style.transform = `translateY(-${scroll.top}px)`;
 });
 
 /* ---------- ENGINE ---------- */
@@ -188,8 +190,7 @@ function parseBlocks(lines) {
   function pushCurrent() {
     const trimmedExpr = currentExpr.trim();
     if (trimmedExpr !== "") {
-      // เพิ่มเงื่อนไข: ตรวจสอบว่าถ้าข้อความ "ไม่ได้" ลงท้ายด้วยเครื่องหมาย ; ให้คำนวณตามปกติ
-      // แต่ถ้ามี ; อยู่ท้ายสุด ระบบจะมองข้ามก้อนนี้ไปเลย ไม่นำไปเก็บใน blocks
+      // ตรวจสอบว่าถ้าข้อความ "ไม่ได้" ลงท้ายด้วยเครื่องหมาย ; ให้คำนวณตามปกติ
       if (!trimmedExpr.endsWith(";")) {
         blocks.push(buildBlock(startLine !== null ? startLine : 0, currentExpr));
       }
@@ -286,6 +287,10 @@ function render() {
   });
 
   totalDiv.textContent = total.toLocaleString('en-US', { maximumFractionDigits: 2 });
+
+  // จัดตำแหน่ง canvas ให้ตรงกับ Scroll ทันทีหลังจากการคำนวณใหม่
+  const scrollInfo = cm.getScrollInfo();
+  canvas.style.transform = `translateY(-${scrollInfo.top}px)`;
 }
 
 /* ---------- INIT ---------- */
