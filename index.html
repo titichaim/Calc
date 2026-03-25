@@ -1,7 +1,18 @@
 <script>
+const input = document.getElementById("input");
+const resultsDiv = document.getElementById("results");
+const totalDiv = document.getElementById("total");
+
+input.value = localStorage.getItem("calc-data") || "";
+
+input.addEventListener("input", () => {
+  localStorage.setItem("calc-data", input.value);
+  calculate();
+});
+
 function normalizeExpression(expr) {
   return expr
-    .replace(/,/g, "") // remove comma
+    .replace(/,/g, "")
     .replace(/(\d+(\.\d+)?)k/gi, (_, n) => n * 1000)
     .replace(/(\d+(\.\d+)?)m/gi, (_, n) => n * 1000000)
     .trim();
@@ -23,10 +34,8 @@ function parseLines(lines) {
   for (let i = 0; i < lines.length; i++) {
     let line = lines[i];
 
-    // เอา comment ออก
     line = line.split("//")[0];
 
-    // เอา label ออก (ก่อน :)
     if (line.includes(":")) {
       line = line.split(":").slice(1).join(":");
     }
@@ -40,19 +49,46 @@ function parseLines(lines) {
 
     buffer += " " + line;
 
-    // ถ้าจบด้วย operator → ยังไม่คำนวณ
     if (/[+\-*/]$/.test(line)) {
       results.push(null);
       continue;
     }
 
-    // คำนวณ
     const result = safeEval(buffer);
-
     results.push(result);
     buffer = "";
   }
 
   return results;
 }
+
+function calculate() {
+  const lines = input.value.split("\n");
+  const results = parseLines(lines);
+
+  resultsDiv.innerHTML = "";
+  let total = 0;
+
+  results.forEach(result => {
+    const row = document.createElement("div");
+    row.className = "row";
+
+    if (result !== null && !isNaN(result)) {
+      const num = Number(result);
+      row.textContent = num.toLocaleString();
+
+      if (num > 0) row.classList.add("positive");
+      if (num < 0) row.classList.add("negative");
+
+      total += num;
+    }
+
+    resultsDiv.appendChild(row);
+  });
+
+  totalDiv.textContent = total.toLocaleString();
+}
+
+calculate();
 </script>
+
