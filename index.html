@@ -110,7 +110,8 @@ CodeMirror.defineMode("calc", function() {
 const cm = CodeMirror.fromTextArea(document.getElementById("editor"), {
   lineNumbers: false,
   mode: "calc", // แก้ไข: เรียกใช้โหมด "calc" ที่เพิ่งสร้างด้านบน
-  lineWrapping: true
+  lineWrapping: true,
+  viewportMargin: Infinity 
 });
 
 cm.setValue(localStorage.getItem("calc-data") || 
