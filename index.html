@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Calc Fixed</title>
+<title>Calc Stable</title>
 
 <style>
 body {
@@ -28,7 +28,6 @@ body {
 #highlight {
   position: absolute;
   inset: 0;
-  margin: 0;
   padding: 16px;
   font-size: 16px;
   line-height: 28px;
@@ -60,6 +59,7 @@ textarea {
   width: 50%;
   padding: 16px;
   border-left: 1px solid #222;
+  overflow-y: auto;
 }
 
 .row {
@@ -110,49 +110,56 @@ const totalDiv = document.getElementById("total");
 
 /* ---------- INIT ---------- */
 input.value = localStorage.getItem("calc-data") || 
+`DEPT: -247,000
+CC: -147,880.61
+GIG: -10k
+
+UOB: 100 + 50`;
 
 updateAll();
 
 /* ---------- EVENTS ---------- */
 input.addEventListener("input", () => {
-  localStorage.setItem("calc-data", input.value);
-  updateAll();
+  try {
+    localStorage.setItem("calc-data", input.value);
+    updateAll();
+  } catch (e) {
+    console.error("update error:", e);
+  }
 });
 
 input.addEventListener("scroll", () => {
   highlight.scrollTop = input.scrollTop;
 });
 
-/* ---------- HIGHLIGHT (FIXED) ---------- */
-
+/* ---------- HIGHLIGHT (SAFE) ---------- */
 function highlightText(text) {
-  // 1. escape ก่อน (กัน HTML พัง)
+  // escape ก่อน
   text = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // 2. split เป็น token (ไม่ไปยุ่ง HTML)
   return text.replace(
     /(\d+(\.\d+)?)|([+\-*/])|([a-zA-Zก-ฮ:]+)/g,
     (match) => {
-      if (/^\d/.test(match)) {
-        return `<span class="num">${match}</span>`;
-      }
-      if (/^[+\-*/]$/.test(match)) {
-        return `<span class="op">${match}</span>`;
-      }
+      if (/^\d/.test(match)) return `<span class="num">${match}</span>`;
+      if (/^[+\-*/]$/.test(match)) return `<span class="op">${match}</span>`;
       return `<span class="text">${match}</span>`;
     }
   );
 }
 
 function updateHighlight() {
-  highlight.innerHTML = highlightText(input.value); // ✅ FIX สำคัญ
+  try {
+    highlight.innerHTML = highlightText(input.value);
+  } catch (e) {
+    console.error("highlight error:", e);
+    highlight.innerText = input.value; // fallback กันพัง
+  }
 }
 
 /* ---------- CALC ---------- */
-
 function normalize(expr) {
   return expr
     .replace(/,/g, "")
@@ -198,7 +205,6 @@ function calculate() {
 }
 
 /* ---------- RUN ---------- */
-
 function updateAll() {
   updateHighlight();
   calculate();
